@@ -3,7 +3,8 @@ from __future__ import annotations
 import pathlib
 from functools import lru_cache
 
-FIXTURES_PATH = (pathlib.Path(__file__).resolve().parent) / "fixtures"
+parent_path = pathlib.Path(__file__).resolve().parent
+FIXTURES_PATH = parent_path.joinpath("fixtures")
 
 
 @lru_cache
