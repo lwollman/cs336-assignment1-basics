@@ -1,0 +1,31 @@
+2025 07 22
+
+
+To run tests in a git bash shell, it looks like the following syntax seems to work.
+
+In this example we call only a single subtest (test_roundtrip_empty) within the larger test_module (test_tokenizer.py)
+Note the use of double quotes is not a typo.
+
+> ".venv/Scripts/python.exe" -m pytest tests/test_tokenizer.py -k test_roundtrip_empty
+
+
+Some old snippet from launch.json (TODO: delete once we have reliable debugging for tests)
+
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Debug Test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/.venv/Scripts/pytest",
+            "args": [
+                "tests/test_tokenizer.py::test_roundtrip_empty",
+                "-v"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
+
