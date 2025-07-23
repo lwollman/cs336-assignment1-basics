@@ -45,7 +45,7 @@ def get_tokenizer_from_vocab_merges_path(
     with open(vocab_path) as vocab_f:
         gpt2_vocab = json.load(vocab_f)
     gpt2_bpe_merges = []
-    with open(merges_path) as f:
+    with open(merges_path, encoding="utf8") as f:
         for line in f:
             cleaned_line = line.rstrip()
             if cleaned_line and len(cleaned_line.split(" ")) == 2:
