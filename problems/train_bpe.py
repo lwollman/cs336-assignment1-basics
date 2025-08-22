@@ -34,14 +34,15 @@ to see sample output from a method like this.
 
 """
 
-from typing import Union
+import regex
+from typing import Optional, Union
 
 import pathlib
 ASSIGNEMNT_FOLDER = pathlib.Path.home().joinpath("software/sound_thinking/stanford_cs/cs336-assignment1-basics")
 DATA_FOLDER = ASSIGNEMNT_FOLDER.joinpath("data")
 print(f"data folder = {DATA_FOLDER}")
 assert DATA_FOLDER.exists()
-DEFAULT_SPECIAL_TOKENS = [b"<unk>", b"<pad>", b"<s>", b"</s>", b"<|endoftext|>"]
+DEFAULT_SPECIAL_TOKENS = ["<|endoftext|>", "qokka"]  #[ b"<unk>", b"<pad>", b"<s>", b"</s>", ]
 TOY_INPUT_FILE = DATA_FOLDER.joinpath("toy_string.txt")
 
 def train_bpe(
@@ -70,6 +71,7 @@ def train_bpe(
 
     Development Notes:
     Main Steps:
+        - special tokens splits (e.g. remove weird characters that are used to navigate document, not communicate language meaning)
         - Pretokenize (Use re.finditer() and read the docs)
         - Convert pretokenized data into UTF-8 Bytes
         - 
@@ -90,10 +92,11 @@ def train_bpe(
     # TODO: consider placing the for loop outside the pretokenizer to help 
     # with parallelization.
     pretokenized_text = pretokenize(splitted_text)
-
     print(f"Pretokenized text\n {pretokenized_text}")
 
-    print("Transform to Bytes")
+    print("TODO: FIXME Transform to Bytes")
+
+
     #bytes = 
 
     return
@@ -108,18 +111,29 @@ def split_on_special_tokens(
         Return the input string, chunked, and with none of the special tokens within it.
     """
     print("TODO: FIXME: just splits on whitespace for now")
-    splitted = input_string.split()
+    # sorted_tokens = special_tokens.sort()
+    pattern = "|".join(regex.escape(st) for st in special_tokens)
+    splitted = regex.split(pattern=pattern, string=input_string)
     return splitted
 
 
-def pretokenize(strings: list[str],):
+def pretokenize(
+        strings: list[str],
+        regex_pattern: Optional[str] = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""",
+        ) -> list[str]:
     '''
 
     TODO: add fancy tools like
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
     '''
-    output = input_string.split()
+    output = []
+    for element in strings:
+        # splitted = element.split()
+        splitted = regex.finditer(regex_pattern, )
+        output.extend(splitted)
+
+    # output = input_string.split()
     return output
 
 def main():
