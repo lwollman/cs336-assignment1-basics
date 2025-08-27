@@ -34,10 +34,13 @@ to see sample output from a method like this.
 
 """
 
-import regex
+# from loguru import logger
 from typing import Optional, Union
 
 import pathlib
+import regex
+
+
 ASSIGNEMNT_FOLDER = pathlib.Path.home().joinpath("software/sound_thinking/stanford_cs/cs336-assignment1-basics")
 DATA_FOLDER = ASSIGNEMNT_FOLDER.joinpath("data")
 print(f"data folder = {DATA_FOLDER}")
@@ -96,7 +99,6 @@ def train_bpe(
 
     print("TODO: FIXME Transform to Bytes")
 
-
     #bytes = 
 
     return
@@ -104,16 +106,46 @@ def train_bpe(
 
 def split_on_special_tokens(
         input_string: str,
-        special_tokens: list[str]
-        )-> list[str]:
+        special_tokens: list[str],
+        rejoin: bool = True
+        )-> Union[list[str], str]:
     """
-        This is a string chunking operation.
-        Return the input string, chunked, and with none of the special tokens within it.
+        Split a string on special tokens.
+
+        Parameters
+        ----------
+        input_string : str
+            The input string to be split.
+        special_tokens : list of str or str
+            Special tokens to split the input string on. Each occurrence of a special token will be used as a split point.
+        rejoin : bool, optional
+            If True, the resulting list of strings will be joined into a single string separated by spaces. 
+            If False, returns a list of split strings. Default is True.
+
+        Returns
+        -------
+        splitted: Union[list[str], str]
+            The input string split on the special tokens. If `rejoin` is True, returns a single-element list containing the joined string.
+            Note that the split operation (string chunking) will drop all the special_tokens.
+        
+
+        Examples
+        --------
+        >>> split_on_special_tokens("Hello <|endoftext|> world", ["<|endoftext|>"])
+        ['Hello  world']
+
+        >>> split_on_special_tokens("foo bar baz", ["bar"], rejoin=False)
+        ['foo ', ' baz']
+
+        TODO: Discuss; if we want to rename this to drop_special_tokens and return the joined output?
     """
-    print("TODO: FIXME: just splits on whitespace for now")
+    
     # sorted_tokens = special_tokens.sort()
     pattern = "|".join(regex.escape(st) for st in special_tokens)
     splitted = regex.split(pattern=pattern, string=input_string)
+    if rejoin:
+        return " ".join(splitted)
+
     return splitted
 
 
@@ -130,7 +162,7 @@ def pretokenize(
     output = []
     for element in strings:
         # splitted = element.split()
-        splitted = regex.finditer(regex_pattern, )
+        splitted = regex.finditer(regex_pattern, element)
         output.extend(splitted)
 
     # output = input_string.split()
