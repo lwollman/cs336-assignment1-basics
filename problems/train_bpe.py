@@ -32,6 +32,11 @@ tests/fixtures/train-bpe-reference-vocab.json
 to see sample output from a method like this.
 
 
+> uv run problems/train_bpe.py
+> uv run pytest
+
+===================================== 46 failed, 2 skipped, 1 warning in 19.85s =====================================
+
 """
 
 # from loguru import logger
@@ -157,6 +162,8 @@ def pretokenize(
 
     TODO: add fancy tools like
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+
+    review usage of 'match', 'pattern', 'search' methods of <class '_regex.Scanner'>
 
     '''
     output = []
