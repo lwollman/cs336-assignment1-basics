@@ -6,7 +6,7 @@ from typing import Optional
 
 import torch
 
-class Linear():
+class Linear(torch.nn.Module):
     """
         Deliverable: Implement a Linear class that inherits from torch.nn.Module 
         and performs a linear transformation. Your implementation should follow
