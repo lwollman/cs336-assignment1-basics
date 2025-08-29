@@ -15,7 +15,7 @@ class Linear():
         """
         Construct a linear transformation module. This function should accept the following parameters:  in_features: int final dimension of the input  out_features: int final dimension of the output  device: torch.device | None = None Device to store the parameters on  dtype: torch.dtype | None = None Data type of the parameters):
         """
-        self.weight = 
+        self.weight = "TODO"
         print("do your homework")
 
     
