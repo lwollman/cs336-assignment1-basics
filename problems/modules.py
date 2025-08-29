@@ -1,19 +1,38 @@
 """
-Deliverable: Implement a Linear class that inherits from torch.nn.Module and performs a linear transformation. Your implementation should follow the interface of PyTorch’s built-in nn.Linear module, except for not having a bias argument or parameter. 
-We recommend the following interface:
+    Codes that we will plug into adapters.py
+
 """
+from typing import Optional
+
 import torch
 
 class Linear():
+    """
+        Deliverable: Implement a Linear class that inherits from torch.nn.Module 
+        and performs a linear transformation. Your implementation should follow
+        the interface of PyTorch’s built-in nn.Linear module, except for not 
+        having a bias argument or parameter. 
+    """
     def __init__(
         self, 
-        in_features, 
-        out_features, 
-        device=None, 
-        dtype=None
+        in_features: int, 
+        out_features: int, 
+        device: Optional[torch.device] = None, 
+        dtype: Optional[torch.dtype] = None, 
         ): 
         """
-        Construct a linear transformation module. This function should accept the following parameters:  in_features: int final dimension of the input  out_features: int final dimension of the output  device: torch.device | None = None Device to store the parameters on  dtype: torch.dtype | None = None Data type of the parameters):
+        Constructor.
+        
+        Parameters
+        ---------
+        in_features: int
+            final dimension of the input
+        out_features: int 
+            final dimension of the output  
+        device: Optional[torch.device]
+            Device to store the parameters on  
+        dtype: Optional[torch.dtype]
+            Data type of the parameters):
         """
         self.weight = "TODO"
         print("do your homework")
