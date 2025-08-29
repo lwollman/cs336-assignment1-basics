@@ -50,7 +50,7 @@ ASSIGNEMNT_FOLDER = pathlib.Path.home().joinpath("software/sound_thinking/stanfo
 DATA_FOLDER = ASSIGNEMNT_FOLDER.joinpath("data")
 print(f"data folder = {DATA_FOLDER}")
 assert DATA_FOLDER.exists()
-DEFAULT_SPECIAL_TOKENS = ["<|endoftext|>", "qokka"]  #[ b"<unk>", b"<pad>", b"<s>", b"</s>", ]
+DEFAULT_SPECIAL_TOKENS = ["<|endoftext|>", "qokka"]  # [ b"<unk>", b"<pad>", b"<s>", b"</s>", ]
 TOY_INPUT_FILE = DATA_FOLDER.joinpath("toy_string.txt")
 
 def train_bpe(
