@@ -9,6 +9,7 @@ import numpy.typing as npt
 import torch
 from torch import Tensor
 
+from problems.modules import Linear
 
 
 def run_linear(
@@ -29,8 +30,14 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
-
-    raise NotImplementedError
+    linear_instance = Linear(
+        in_features=d_in,
+        out_features=d_out,
+        # device = 
+        # dtype=
+    )
+    return linear_instance.forward(in_features)
+    # raise NotImplementedError
 
 
 def run_embedding(
