@@ -36,6 +36,7 @@ def run_linear(
         # device = 
         # dtype=
     )
+    linear_instance.load_state_dict({"weights": weights})
     return linear_instance.forward(in_features)
     # raise NotImplementedError
 

@@ -1,6 +1,8 @@
 """
     Codes that we will plug into adapters.py
 
+   
+
 """
 from typing import Optional
 
@@ -34,16 +36,27 @@ class Linear(torch.nn.Module):
         dtype: Optional[torch.dtype]
             Data type of the parameters):
         """
-        self.weight = "TODO"
-        print("do your homework")
+        super().__init__()
+        weights =  torch.empty(out_features, in_features)
+        weights = torch.nn.init.trunc_normal_(weights, mean=0.0, std=3.01, a=-0.02, b=0.02)
+        weights = torch.nn.Parameter(weights)
+        self.weights = weights
+        print("init done")
 
     
     def forward(self, 
-                x: torch.Tensor
-                ) -> torch.Tensor: 
-                """
-                Apply the linear transformation to the input.  
-                Make sure to:  
-                subclass nn.Module  • call the superclass constructor  • construct and store your parameter as W (not W ⊤) for memory ordering reasons, putting it in an nn.Parameter  • of course, don’t use nn.Linear or nn.functional.linear
-                """
-                return torch.zeros((4, 12, 128))
+        x: torch.Tensor
+        ) -> torch.Tensor: 
+        """
+        Apply the linear transformation to the input.  
+        Make sure to:  
+        subclass nn.Module  • call the superclass constructor  • construct and store your parameter as W (not W ⊤) for memory ordering reasons, putting it in an nn.Parameter  • of course, don’t use nn.Linear or nn.functional.linear
+        """
+        print(x.shape) # 4 , 12, 64
+        print(self.weights.shape)
+        result = x @ self.weights.T  # @ x
+        # result = self.weights @ x.T
+        
+        # result = torch.zeros((4, 12, 128))
+        # result[0,0,0] = -0.358869
+        return result
