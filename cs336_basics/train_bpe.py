@@ -32,7 +32,7 @@ tests/fixtures/train-bpe-reference-vocab.json
 to see sample output from a method like this.
 
 
-> uv run problems/train_bpe.py
+> uv run cs336_basics/train_bpe.py
 > uv run pytest
 
 ===================================== 46 failed, 2 skipped, 1 warning in 19.85s =====================================
