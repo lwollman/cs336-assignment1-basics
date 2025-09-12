@@ -66,17 +66,6 @@ class Embedding(torch.nn.Module):
     """
     Embedding lookup module.
 
-    Parameters
-    ----------
-    num_embeddings : int
-        Size of the vocabulary.
-    embedding_dim : int
-        Dimension of the embedding vectors (d_model).
-    device : torch.device or None, optional
-        Device to store the parameters on.
-    dtype : torch.dtype or None, optional
-        Data type of the parameters.
-
     Methods
     -------
     forward(token_ids: torch.Tensor) -> torch.Tensor
@@ -89,4 +78,27 @@ class Embedding(torch.nn.Module):
     - The embedding matrix has shape (num_embeddings, embedding_dim), with d_model as the final dimension.
     - Uses torch.nn.init.trunc_normal_ for initialization.
     - Does not use nn.Embedding or nn.functional.embedding.
+
+    To test:
+    > uv run pytest -k test_embedding.
     """
+    def __init__(self, *args, **kwargs):
+        """
+        Parameters
+        ----------
+        num_embeddings : int
+            Size of the vocabulary.
+        embedding_dim : int
+            Dimension of the embedding vectors (d_model).
+        device : torch.device or None, optional
+            Device to store the parameters on.
+        dtype : torch.dtype or None, optional
+    
+        Data type of the parameters.
+
+        """
+
+        
+        
+        super().__init__(*args, **kwargs)
+        pass
