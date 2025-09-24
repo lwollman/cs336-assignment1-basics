@@ -9,6 +9,10 @@ import numpy.typing as npt
 import torch
 from torch import Tensor
 
+import cs336_basics.modules as homework
+# from cs336_basics.modules import Embedding
+# from cs336_basics.modules import Linear
+
 
 def run_linear(
     d_in: int,
@@ -28,8 +32,15 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
-
-    raise NotImplementedError
+    linear_instance = homework.Linear(
+        in_features=d_in,
+        out_features=d_out,
+        # device = 
+        # dtype=
+    )
+    
+    linear_instance.load_state_dict({"weights": weights})
+    return linear_instance.forward(in_features)
 
 
 def run_embedding(
@@ -41,6 +52,7 @@ def run_embedding(
     """
     Given the weights of an Embedding layer, get the embeddings for a batch of token ids.
 
+    Notes: Token ids was predfined
     Args:
         vocab_size (int): The number of embeddings in the vocabulary
         d_model (int): The size of the embedding dimension
@@ -50,8 +62,16 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
-
-    raise NotImplementedError
+    embedding_instance = homework.Embedding(
+        num_embeddings=vocab_size,
+        embedding_dim = d_model,
+        # device = 
+        # dtype=
+    )
+    
+    embedding_instance.load_state_dict({"embedding_matrix": weights})
+    return embedding_instance.forward(token_ids=token_ids)
+    # raise NotImplementedError
 
 
 def run_swiglu(
@@ -589,4 +609,10 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    raise NotImplementedError
+    from cs336_basics.train_bpe import train_bpe
+    return train_bpe(
+        input_path=input_path,
+        vocab_size=vocab_size,
+        special_tokens=special_tokens,
+        )
+    #raise NotImplementedError

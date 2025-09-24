@@ -50,11 +50,15 @@ def find_chunk_boundaries(
 
 
 ## Usage
-with open(..., "rb") as f:
-    num_processes = 4
-    boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
-
-    # The following is a serial implementation, but you can parallelize this
+from paths import DATA_PATH
+test_file = DATA_PATH.joinpath("TinyStoriesV2-GPT4-train.txt")
+assert test_file.exists()
+num_processes = 10
+with open(test_file, "rb") as f:
+    boundaries = find_chunk_boundaries(
+        f, num_processes, "<|endoftext|>".encode("utf-8"))
+        
+    # The following is a serial implementation, but you can parallelize this 
     # by sending each start/end pair to a set of processes.
     for start, end in zip(boundaries[:-1], boundaries[1:]):
         f.seek(start)
