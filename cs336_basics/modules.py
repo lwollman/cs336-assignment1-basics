@@ -37,11 +37,16 @@ class Linear(torch.nn.Module):
             Data type of the parameters):
         """
         super().__init__()
+        sigma_squared = 2. / (in_features + out_features)
+        sigma = torch.sqrt(sigma_squared)
         weights =  torch.empty(out_features, in_features)
-        weights = torch.nn.init.trunc_normal_(weights, mean=0.0, std=3.01, a=-0.02, b=0.02)
-        weights = torch.nn.Parameter(weights)
+        weights = torch.nn.init.trunc_normal_(
+            weights, 
+            mean=0.0, 
+            std=3.01, a=-0.02, b=0.02)
+        weights = torch.nn.Parameter(weights)  # The casting as Parameter designates this as learnable
         self.weights = weights
-        print("init done")
+        print("std has an unconventional value, shoudl be 1")
 
     
     def forward(self, 
@@ -82,8 +87,16 @@ class Embedding(torch.nn.Module):
     To test:
     > uv run pytest -k test_embedding.
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(
+            self,
+            num_embeddings: int,
+            embedding_dim : int,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+            ):
         """
+        Constructor.
+
         Parameters
         ----------
         num_embeddings : int
@@ -94,11 +107,28 @@ class Embedding(torch.nn.Module):
             Device to store the parameters on.
         dtype : torch.dtype or None, optional
     
-        Data type of the parameters.
-
+        TODO: This is going to need to creat
         """
+        super().__init__()
+        embedding_matrix = torch.empty(num_embeddings, embedding_dim)
+        embedding_matrix = torch.nn.init.trunc_normal_(
+            embedding_matrix, 
+            mean=0.0, 
+            std=1.0, 
+            a=-3.0, 
+            b=3.0,
+            )
+        embedding_matrix = torch.nn.Parameter(embedding_matrix)  # The casting as Parameter designates this as learnable
+        self.embedding_matrix = embedding_matrix
 
+    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+        """
+        Since the vocabulary is (by definition of the algorithm that generated it)
+        is just the numbers in [0, N], we just simply get the rows by their index 
+        which is the same as token id.
+        """
+        return self.embedding_matrix[token_ids,:]
         
-        
-        super().__init__(*args, **kwargs)
-        pass
+
+
+
