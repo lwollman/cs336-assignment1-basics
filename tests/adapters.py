@@ -70,6 +70,7 @@ def run_embedding(
         # dtype=
     )
     
+    
     embedding_instance.load_state_dict({"embedding_matrix": weights})
     return embedding_instance.forward(token_ids=token_ids)
     # raise NotImplementedError
