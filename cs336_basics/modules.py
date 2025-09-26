@@ -6,7 +6,9 @@
 """
 from typing import Optional
 
+import math
 import torch
+
 
 class Linear(torch.nn.Module):
     """
@@ -38,7 +40,7 @@ class Linear(torch.nn.Module):
         """
         super().__init__()
         sigma_squared = 2. / (in_features + out_features)
-        sigma = torch.sqrt(sigma_squared)
+        sigma = math.sqrt(sigma_squared)
         weights =  torch.empty(out_features, in_features)
         weights = torch.nn.init.trunc_normal_(
             weights, 
@@ -130,5 +132,54 @@ class Embedding(torch.nn.Module):
         return self.embedding_matrix[token_ids,:]
         
 
+class RMSLayerNormalization(torch.nn.Module):
+    """
+    Problem (rmsnorm): Root Mean Square Layer Normalization (1 point)
+    Deliverable: Implement RMSNorm as a torch.nn.Module. 
+    
+    Note: Remember to upcast your input to torch.float32 before performing the normalization (and
+    later downcast to the original dtype), as described above.
+    To test your implementation, implement the test adapter at [adapters.run_rmsnorm]. Then, run uv
+    run pytest -k test_rmsnorm.
+    """
 
+    def __init__(
+            self, 
+            d_model: int, 
+            eps: float = 1e-5, 
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+            ):  # -> 
+        """
+        Parameters
+        ----------
+        d_model : int
+            Hidden dimension of the model.
+        eps : int
+            Epsilon value for numerical stability
+        device : torch.device or None, optional
+            Device to store the parameters on.
+        dtype : torch.dtype or None, optional
+
+        """
+        super().__init__()
+        self.rmsy_mcrms = None
+        # embedding_matrix = torch.empty(num_embeddings, embedding_dim)
+        # embedding_matrix = torch.nn.init.trunc_normal_(
+        #     embedding_matrix, 
+        #     mean=0.0, 
+        #     std=1.0, 
+        #     a=-3.0, 
+        #     b=3.0,
+        #     )
+        # embedding_matrix = torch.nn.Parameter(embedding_matrix)  # The casting as Parameter designates this as learnable
+        # self.embedding_matrix = embedding_matrix
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Process an input tensor of shape (batch_size, sequence_length, d_model) and return a tensor of the same shape.
+
+        
+        """
+        pass
 
