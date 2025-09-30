@@ -155,7 +155,7 @@ class RMSLayerNormalization(torch.nn.Module):
         ----------
         d_model : int
             Hidden dimension of the model.
-        eps : int
+        eps : float
             Epsilon value for numerical stability
         device : torch.device or None, optional
             Device to store the parameters on.
@@ -163,23 +163,20 @@ class RMSLayerNormalization(torch.nn.Module):
 
         """
         super().__init__()
-        self.rmsy_mcrms = None
-        # embedding_matrix = torch.empty(num_embeddings, embedding_dim)
-        # embedding_matrix = torch.nn.init.trunc_normal_(
-        #     embedding_matrix, 
-        #     mean=0.0, 
-        #     std=1.0, 
-        #     a=-3.0, 
-        #     b=3.0,
-        #     )
-        # embedding_matrix = torch.nn.Parameter(embedding_matrix)  # The casting as Parameter designates this as learnable
-        # self.embedding_matrix = embedding_matrix
-    
+        mc_rms = torch.empty(d_model)
+        mc_rms = torch.nn.init.trunc_normal_(
+            mc_rms, 
+            mean=0.0,
+        ) 
+        mc_rms = torch.nn.Parameter(mc_rms)
+        self.mc_rms = mc_rms
+
+        
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Process an input tensor of shape (batch_size, sequence_length, d_model) and return a tensor of the same shape.
-
-        
         """
-        pass
+        x_squared = x ** 2
+        # x.pow
+        return self.mc_rms
 

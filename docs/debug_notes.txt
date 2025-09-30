@@ -1,3 +1,25 @@
+# Interesting web links:
+
+## Tokenization
+
+Allow to see what the tokenization is like for various models.
+
+https://gpt-tokenizer.dev/
+
+
+## Embedding
+- https://www.technologyreview.com/2015/09/17/166211/king-man-woman-queen-the-marvelous-mathematics-of-computational-linguistics/
+- https://www.reddit.com/r/computerscience/comments/1f4sg8b/king_man_woman_queen/
+
+Also, just google King+queen+man+woman+vector and look at the images.
+https://www.google.com/search?q=king+queen+man+woman+vector&rlz=1C5GCEM_enUS1122US1122&oq=king+queen+man&gs_lcrp=EgZjaHJvbWUqBwgBEAAYgAQyBggAEEUYOTIHCAEQABiABDIHCAIQABiABDIICAMQABgWGB4yCAgEEAAYFhgeMggIBRAAGBYYHjIICAYQABgWGB4yCggHEAAYChgWGB4yCggIEAAYChgWGB4yCAgJEAAYFhge0gEINjg0N2owajeoAgCwAgA&sourceid=chrome&ie=UTF-8
+
+
+Norms and Tensors
+- https://medium.com/@zljdanceholic/groupnorm-then-batchnorm-instancenorm-layernorm-e2b2a1d350a0
+
+google: "batch norm vs layer norm", look at images.
+
 2025 07 22
 
 
