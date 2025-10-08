@@ -167,13 +167,13 @@ class RMSLayerNormalization(torch.nn.Module):
         super().__init__()
         self._eps = eps
         self._d_model = d_model
-        mc_rms = torch.empty(d_model)
-        mc_rms = torch.nn.init.trunc_normal_(
-            mc_rms, 
+        g = torch.empty(d_model)
+        g = torch.nn.init.trunc_normal_(
+            g, 
             mean=0.0,
         ) 
-        mc_rms = torch.nn.Parameter(mc_rms)  # learnable
-        self.mc_rms = mc_rms
+        g = torch.nn.Parameter(g)  # learnable
+        self.g = g
 
     @property
     def eps(self) -> float:
@@ -200,7 +200,8 @@ class RMSLayerNormalization(torch.nn.Module):
 
         Normalize the input tensor by the scalar RMS(a) -- see Equation (4) in the notes.
         """
-        # Upcast to float23
+        # Upcast to float32
+        in_dtype = a.dtype
         a_float32 = a.to(torch.float32)
 
         # Use einx
@@ -210,18 +211,20 @@ class RMSLayerNormalization(torch.nn.Module):
         # use a space to separate dimensions in the einx input string.
         # here we are saying use the last dimension.
         # To use second last would be einx.mean("... [d_model] [qq]")
-        rms_a_einx = einx.mean(
+        ms_a_einx = einx.mean(
             description="... [d_model]", 
             tensor=a_squared_einx, 
             keepdims=True
             ) + self.eps
-        rms_a = a_squared.mean(axis=-1) + self.eps  #
+        rms_a_einx = ms_a_einx.pow(0.5)        
+        
+        ms_a = a_squared.mean(axis=-1) + self.eps  #
+        rms_a = ms_a.pow(0.5)
 
         #norm_rms = a_float32 / rms_a. # has wrong dims because lost one in mean
         norm_rms_einx = a_float32 / rms_a_einx  # dims OK here becaue of kkeepdims
-        g = self.mc_rms
         # return g * norm_rms_einx
-        weighted = g * norm_rms_einx
+        weighted = self.g * norm_rms_einx
 
-        return norm_rms_einx * g
+        return weighted.to(in_dtype)
 

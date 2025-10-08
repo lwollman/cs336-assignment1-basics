@@ -404,7 +404,7 @@ def run_rmsnorm(
         d_model=d_model,
         eps=eps
     )
-    rmsnorm_instance.load_state_dict({"mc_rms": weights})
+    rmsnorm_instance.load_state_dict({"g": weights})
     return rmsnorm_instance.forward(in_features)
 
 
