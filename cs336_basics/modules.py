@@ -6,6 +6,7 @@
 """
 from typing import Optional
 
+import einx
 import math
 import torch
 
@@ -155,6 +156,7 @@ class RMSLayerNormalization(torch.nn.Module):
         ----------
         d_model : int
             Hidden dimension of the model.
+            i.e. the dimension of the vector space into which the tokens are embedded.
         eps : float
             Epsilon value for numerical stability
         device : torch.device or None, optional
@@ -163,20 +165,63 @@ class RMSLayerNormalization(torch.nn.Module):
 
         """
         super().__init__()
+        self._eps = eps
+        self._d_model = d_model
         mc_rms = torch.empty(d_model)
         mc_rms = torch.nn.init.trunc_normal_(
             mc_rms, 
             mean=0.0,
         ) 
-        mc_rms = torch.nn.Parameter(mc_rms)
+        mc_rms = torch.nn.Parameter(mc_rms)  # learnable
         self.mc_rms = mc_rms
 
+    @property
+    def eps(self) -> float:
+        return self._eps
+    
+    def forward_crude(self, a: torch.Tensor) -> torch.Tensor:
+        """
+        This example uses very crude logic.
+        Process an input tensor of shape (batch_size, sequence_length, d_model) and return a tensor of the same shape.
+
+        Normalize the input tensor by the scalar RMS(a) -- see Equation (4) in the notes.
+
+        """
+
+        a_squared = a ** 2. # x.pow. 
+        rms_a = a_squared.mean(axis=-1) + self.eps  #
+        norm_rms = a / rms_a
         
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.mc_rms
+
+    def forward(self, a: torch.Tensor) -> torch.Tensor:
         """
         Process an input tensor of shape (batch_size, sequence_length, d_model) and return a tensor of the same shape.
+
+        Normalize the input tensor by the scalar RMS(a) -- see Equation (4) in the notes.
         """
-        x_squared = x ** 2
-        # x.pow
-        return self.mc_rms
+        # Upcast to float23
+        a_float32 = a.to(torch.float32)
+
+        # Use einx
+        a_squared_einx = einx.dot("..., ... -> ...", a_float32, a_float32)
+        a_squared = a_float32 ** 2. # x.pow. 
+
+        # use a space to separate dimensions in the einx input string.
+        # here we are saying use the last dimension.
+        # To use second last would be einx.mean("... [d_model] [qq]")
+        rms_a_einx = einx.mean(
+            description="... [d_model]", 
+            tensor=a_squared_einx, 
+            keepdims=True
+            ) + self.eps
+        rms_a = a_squared.mean(axis=-1) + self.eps  #
+
+        #norm_rms = a_float32 / rms_a. # has wrong dims because lost one in mean
+        norm_rms_einx = a_float32 / rms_a_einx  # dims OK here becaue of kkeepdims
+        g = self.mc_rms
+        # return g * norm_rms_einx
+        weighted = g * norm_rms_einx
+
+        return norm_rms_einx * g
 
