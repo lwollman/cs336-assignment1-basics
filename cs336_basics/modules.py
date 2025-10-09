@@ -229,3 +229,49 @@ class RMSLayerNormalization(torch.nn.Module):
 
         return weighted.to(in_dtype)
 
+class SwiGLUFFN(torch.nn.Module):
+    """
+    
+    Deliverable: 
+    Implement the SwiGLU feed-forward network, composed of a SiLU activation
+    function and a GLU.
+
+    **Note**: In this particular case, you should feel free to use torch.sigmoid in your implementation
+    for numerical stability.
+
+    You should set dff to approximately 8/3 × dmodel in your implementation, while ensuring that
+    the dimensionality of the inner feed-forward layer is a multiple of 64 to make good use of your
+    hardware. 
+    To test your implementation against our provided tests, you will need to implement
+    the test adapter at [adapters.run_swiglu]. 
+    
+    Then, run uv run pytest -k test_swiglu to test your implementation.
+    """
+    def __init__(
+            self, 
+            d_model: int, 
+            d_ff: Optional[int] = None, 
+            # dimensional_expansion_factor: Optional[float] = 8/3,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+            ):  # -> 
+        """
+        Parameters
+        ----------
+        d_model : int
+            Hidden dimension of the model.
+            i.e. the dimension of the vector space into which the tokens are embedded.
+        d_ff: int
+            This is a scaled version of hte d_model, approximately equal to
+            8./3 * d_model.  Note that other implemenations may benefit form using 
+            dimensional_expansion_factor
+        device : torch.device or None, optional
+            Device to store the parameters on.
+        dtype : torch.dtype or None, optional
+
+        """
+        super().__init__(*args, **kwargs)
+        
+
+    def forward(self, stuff):
+        pass
