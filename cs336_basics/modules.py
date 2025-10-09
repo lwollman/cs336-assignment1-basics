@@ -168,10 +168,11 @@ class RMSLayerNormalization(torch.nn.Module):
         self._eps = eps
         self._d_model = d_model
         g = torch.empty(d_model)
-        g = torch.nn.init.trunc_normal_(
-            g, 
-            mean=0.0,
-        ) 
+        g = torch.ones(d_model)
+        # g = torch.nn.init.trunc_normal_(
+        #     g, 
+        #     mean=0.0,
+        # ) 
         g = torch.nn.Parameter(g)  # learnable
         self.g = g
 
@@ -217,7 +218,7 @@ class RMSLayerNormalization(torch.nn.Module):
             keepdims=True
             ) + self.eps
         rms_a_einx = ms_a_einx.pow(0.5)        
-        
+
         ms_a = a_squared.mean(axis=-1) + self.eps  #
         rms_a = ms_a.pow(0.5)
 
