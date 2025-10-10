@@ -295,5 +295,16 @@ class SwiGLUFFN(torch.nn.Module):
 
 
     def forward(self, stuff):
+        """
+        implement equatiopn 7
+        """
 
-        pass
+        w1x = self.W1.forward(x) # Note this is the same as below: 
+        # w1x = self.W1(x)
+        w3x = self.W3.forward(x) # Note this is the same as below: 
+        
+        silu = w1x * torch.sigmoid(w1x)
+
+        w2_input = silu * w3x
+        result = self.W2(w2_input)
+        return result
