@@ -46,13 +46,13 @@ class Linear(torch.nn.Module):
         weights = torch.nn.init.trunc_normal_(
             weights, 
             mean=0.0, 
-            std=3.01, 
+            std=3.01, # This is usually 1.
             a=-0.02, 
             b=0.02
             )
         weights = torch.nn.Parameter(weights)  # The casting as Parameter designates this as learnable
         self.weights = weights
-        print("std has an unconventional value, shoudl be 1")
+        # print("std has an unconventional value, shoudl be 1")
 
     
     def forward(self, 
@@ -273,9 +273,9 @@ class SwiGLUFFN(torch.nn.Module):
         dtype : torch.dtype or None, optional
 
         """
-        super().__init__(*args, **kwargs)
-        if np.mod(d_ff, 64) != 0: 
-            pass  # round it up!, no need to worry about this yet
+        super().__init__()
+        # if np.mod(d_ff, 64) != 0: 
+        #     pass  # round it up!, no need to worry about this yet
 
         # Leverage your Linear class from the very first exercise to declare
         # arrays of learnable parameters.
@@ -283,7 +283,7 @@ class SwiGLUFFN(torch.nn.Module):
             in_features=d_model,
             out_features=d_ff
             )
-        # transposed W2 -- see EQuation 7 in teh text.
+        # transposed W2 -- see EQuation 7 in the text.
         self.W2 = Linear(
             in_features=d_ff,
             out_features=d_model
@@ -294,9 +294,9 @@ class SwiGLUFFN(torch.nn.Module):
             )
 
 
-    def forward(self, stuff):
+    def forward(self, x):
         """
-        implement equatiopn 7
+        implement equation 7
         """
 
         w1x = self.W1.forward(x) # Note this is the same as below: 
