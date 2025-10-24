@@ -232,6 +232,7 @@ class RMSLayerNormalization(torch.nn.Module):
 
         return weighted.to(in_dtype)
 
+
 class SwiGLUFFN(torch.nn.Module):
     """
     
@@ -308,3 +309,73 @@ class SwiGLUFFN(torch.nn.Module):
         w2_input = silu * w3x
         result = self.W2(w2_input)
         return result
+
+
+class RotaryPositionalEmbedding(torch.nn.Module):
+    """
+    From page 24/50 of the Assigment1 pdf
+
+    Deliverable: Implement a class RotaryPositionalEmbedding that applies RoPE to the input tensor.
+
+    References:
+    The RoPE paper is worth looking at.
+    For some shortcuts, 
+    ~/software/ramayer/google-colab-examples/HelloWorld_Transformer_with_RoPE.ipynb
+    goes through a use case where RoPE is actually used for a toy problem about predicting
+    the future value of a sinusoidal function.
+    This tutorial uses fairly dense code.
+
+    A more "following the pdf" version of the RoPE stuffs can be found in Ron's RoPE notebook here:
+    https://github.com/rmayer-sst/stanford-cs336-assignment1-basics/blob/ron/cs336_basics/ron_rope.py
+
+
+    To test your implementation, complete [adapters.run_rope] and make sure it passes uv run
+    pytest -k test_rope.
+
+    """
+    def __init__(
+            self, 
+            theta: float, 
+            d_k: int, 
+            max_seq_len: int, 
+            device=None
+            ):
+        """
+        Construct the RoPE module and create buffers if needed.
+
+        Parameters
+        ----------
+        theta: float 
+            Θ value for the RoPE
+        d_k: int 
+            dimension of query and key vectors.
+            This is the dimension of a vector that gets multiplied by the $R^{i}$ matrix.
+            We do not need to worry about attention head splitting stuffs here.
+            
+        max_seq_len: int 
+            Maximum sequence length that will be inputted
+        device: torch.device | None = None 
+            Device to store the buffer on
+        """
+
+        pass
+
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+        """
+        Process an input tensor of shape (..., seq_len, d_k) and return a tensor of 
+        the same shape. Note that you should tolerate x with an arbitrary number of 
+        batch dimensions. You should assume that the token positions are a tensor of 
+        shape (..., seq_len) specifying the token positions of x along the sequence 
+        dimension.
+
+        You should use the token positions to slice your (possibly precomputed) cos and sin tensors along
+        the sequence dimension.
+
+        Parameters
+        ----------
+        x: torch.Tensor
+        token_positions: torch.Tensor
+
+        """
+        
+        pass
