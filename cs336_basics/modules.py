@@ -77,6 +77,15 @@ class Embedding(torch.nn.Module):
     """
     Embedding lookup module.
 
+    Defines a matrix of size num_embeddings (vocabulary size) by embedding_dim (d_model).
+    Thus, this is really just a lookup table of the embedded vectors for each element of the vocabulary.
+    Conventionally, E is an element of R_{n_vocab, d_model} and each row corresponds to an embedded token.
+
+    It is interesting to note that this is initialized randomly, on a truncated normal distrubution, 
+    and this means that the embedded vector length will be random as well, but will tend to have
+    length [TODO: check this -- sqrt(d_model)] as it is a random walk of d_model steps, where the step 
+    size is normally 1.
+
     Methods
     -------
     forward(token_ids: torch.Tensor) -> torch.Tensor
@@ -317,6 +326,8 @@ class RotaryPositionalEmbedding(torch.nn.Module):
 
     Deliverable: Implement a class RotaryPositionalEmbedding that applies RoPE to the input tensor.
 
+    This basically amounts to creating the R rotation matrix and applying it.
+    
     References:
     The RoPE paper is worth looking at.
     For some shortcuts, 
@@ -329,8 +340,8 @@ class RotaryPositionalEmbedding(torch.nn.Module):
     https://github.com/rmayer-sst/stanford-cs336-assignment1-basics/blob/ron/cs336_basics/ron_rope.py
 
 
-    To test your implementation, complete [adapters.run_rope] and make sure it passes uv run
-    pytest -k test_rope.
+    To test your implementation, complete [adapters.run_rope] and make sure it passes 
+    uv run pytest -k test_rope.
 
     """
     def __init__(
@@ -343,22 +354,70 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         """
         Construct the RoPE module and create buffers if needed.
 
+        The init makes the values that are needed to populate the Rotation matrix.
         Parameters
         ----------
         theta: float 
-            Θ value for the RoPE
+            Θ value for the RoPE (has value 10000 in the pdf ... should grow with sequence length)
         d_k: int 
             dimension of query and key vectors.
             This is the dimension of a vector that gets multiplied by the $R^{i}$ matrix.
+            This is not the embedding dimension. (if you were not doing multiheaded attention it would be).
             We do not need to worry about attention head splitting stuffs here.
+            But if we wanted to mention them ... the embedding dimension d is split approximately evenly 
+            among the heads ... this module is conncerned with operations on one of those chunks.
             
         max_seq_len: int 
-            Maximum sequence length that will be inputted
+            Maximum sequence length that will be inputted.
+            a.k.a. the "context length" -- numbers of tokens).
+
         device: torch.device | None = None 
             Device to store the buffer on
-        """
 
-        pass
+        TODO: spend more time with einx, it can replicate rows and columns as well with shorthand:
+        x = np.arange(5)
+        exx = einx.rearrange(" a -> 1 1 a 1 2",x)
+
+        """
+        super().__init__()
+
+        k = torch.arange(d_k//2, device=device)  # dimensions; shape (d_k//2,)
+        i = torch.arange(max_seq_len, device=device)   # positions; shape (max_seq_len,)
+
+        # reshape to make rectangles
+        k = einx.rearrange("a -> 1 a",k)  # shape(1,d_k//2)
+        i = einx.rearrange("a -> a 1",i) # shape(max_seq_len,1)
+
+        assert isinstance(k, torch.Tensor) # just to make VS Code not complain
+        assert isinstance(i, torch.Tensor) # just to make VS Code not complain
+
+        # theta_{i,k} = i / (THETA^{2k/d_k})
+        exponents = 2 * k / d_k  # step from zero to 1 in k steps
+        theta_i_k = i / (theta**exponents)
+        cos_theta_i_k = torch.cos(theta_i_k)
+        sin_theta_i_k = torch.sin(theta_i_k)
+
+        # Put these into a "buffer" as they are not learned things ... 
+        # We used the "parameter" designation for things that are learned .. 
+        # whereas, these, that are 
+        # the buffers are designations for quantities we want to keep around (for efficiency)
+        # and are static -- not learned,
+        # ...     
+        # persistent=False says we dont care to store this in the praemters file
+        # data dertived features (such as empirical average signal strength) may wish to be saved.
+
+        self.register_buffer(
+            name="cosine_table",
+            tensor=cos_theta_i_k,
+            persistent=False
+            )
+        self.register_buffer(
+            name="sine_table",
+            tensor=sin_theta_i_k,
+            persistent=False
+            )
+        return 
+        
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         """
