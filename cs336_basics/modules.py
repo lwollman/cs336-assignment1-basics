@@ -389,8 +389,8 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         device: torch.device | None = None 
             Device to store the buffer on
 
-        TODO: spend more time with einx, it can replicate rows and columns as well with shorthand:
-        x = np.arange(5)
+        TODO: spend more time with einx, 
+        it can replicate rows and columns as well with shorthand
         exx = einx.rearrange(" a -> 1 1 a 1 2",x)
 
         For a fixed position i, there will be k rotation submatrices.
@@ -475,16 +475,16 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         # Build the R matrix -- Just try to build this out in numpy and then
         # translate to torch ... 
 
-        d_k = x.shape[-1]  # Defines the k-index (embedding attention subspace)
-        d_k_over_2 = d_k // 2  # num submatrices making up R_i
-        seq_len = x.shape[-2]  # This corresponds to the i-index
-        if np.mod(d_k,2) != 0:
-            logger.error(f"d_k should be even ... instead its {d_k}")
+        # d_k = x.shape[-1]  # Defines the k-index (embedding attention subspace)
+        # d_k_over_2 = d_k // 2  # num submatrices making up R_i
+        # seq_len = x.shape[-2]  # This corresponds to the i-index
+        # if np.mod(d_k,2) != 0:
+        #     logger.error(f"d_k should be even ... instead its {d_k}")
         
         # extract the cos and sin values for the token positions
         #  ... 
-        s = self.sine_table[token_positions, :]  # shape (..., seq_len, d_k//2)
-        c = self.cosine_table[token_positions, :]  # shape (..., seq_len, d_k//2)
+        s = self.sine_table[token_positions]  # shape (..., seq_len, d_k//2)
+        c = self.cosine_table[token_positions]  # shape (..., seq_len, d_k//2)
         
         # reshape x to get the pairs for rotation
         pairs = einx.rearrange("... s (d c) -> ... s d c", x, c=2)
