@@ -238,12 +238,7 @@ def run_rope(
         d_k=d_k,
         max_seq_len=max_seq_len
     )
-    # rope.load_state_dict(
-    #     {
-    #         "cosine_table": cos_theta_i_k,
-    #         "sine_table": sin_table,
-    #         }
-    # )
+
     return rope.forward(
         x=in_query_or_key, 
         token_positions=token_positions

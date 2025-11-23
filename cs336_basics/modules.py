@@ -439,23 +439,6 @@ class RotaryPositionalEmbedding(torch.nn.Module):
             persistent=False
             )
         return 
-        
-    def get_rotation_submatrix(self, i: int, k:int):
-        """ return the R_i^k matrix from Equation 8"""
-        R = torch.eye(2) * self.cosine_table[i, k]
-        R[0,1] = -self.sine_table[i, k]
-        R[1,0] = self.sine_table[i, k]
-        return R        
-    
-    def get_R_i(self, i:int, k_over_2: int):
-        subspace_dimension = int(2 * k_over_2)
-        rope_matrix_dimension = (subspace_dimension, subspace_dimension)
-        R = np.zeros(rope_matrix_dimension)
-        for k in range(k_over_2):
-            Rik = self.get_rotation_submatrix(i, k)
-            R[2*k:2*k+2, 2*k:2*k+2] = Rik
-        return R
-
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         """
@@ -498,24 +481,17 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         if np.mod(d_k,2) != 0:
             logger.error(f"d_k should be even ... instead its {d_k}")
         
-        # Allocate a container for the R matrices
-        # ... we'll do some einx "repmat" stuff afterwards to get the batch "..." dimension
-        R_single_batch = torch.zeros((seq_len, d_k, d_k))
-        for i in range(seq_len):
-            Ri = self.get_R_i(i=i, k_over_2=d_k_over_2)
-            R_single_batch[i, :, :] = Ri
-            print("now file this Ri into an appropriate" \
-            "dimension tensor")
-
+        # extract the cos and sin values for the token positions
+        #  ... 
+        s = self.sine_table[token_positions, :]  # shape (..., seq_len, d_k//2)
+        c = self.cosine_table[token_positions, :]  # shape (..., seq_len, d_k//2)
         
-        # Make the blocks for the block diagonal matrix:
-        list_of_block_matrices = d_k_over_2 * [ None]
-        for k in range(d_k_over_2): 
-            list_of_block_matrices[k] = self.get_rotation_matrix()
-        # once you have your list, cast it to a torch tensor
-        # now you have seq_len, d_k, d_k
-        # if you didnt care about memory ... you may be tempted to 
+        # reshape x to get the pairs for rotation
+        pairs = einx.rearrange("... s (d c) -> ... s d c", x, c=2)
+        rotated = torch.empty_like(pairs)
+        rotated[..., 0] = c * pairs[..., 0] + s * pairs[..., 1]
+        rotated[..., 1] = -s * pairs[..., 0] + c * pairs[..., 1]
 
-            print("time to access sine and cos tables here")
-
-        # a_squared_einx = einx.dot("..., ... -> ...", a_float32, a_float32)
+        # reshape back to original shape (interleaved even/odd)
+        rotated_vectors = einx.rearrange("... s d c -> ... s (d c)", rotated)
+        return rotated_vectors
