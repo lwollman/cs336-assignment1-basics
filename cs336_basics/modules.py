@@ -1,13 +1,14 @@
 """
     Codes that we will plug into adapters.py
 
-   
-
 """
+
+from loguru import logger
 from typing import Optional
 
 import einx
 import math
+import numpy as np
 import torch
 
 
@@ -326,7 +327,20 @@ class RotaryPositionalEmbedding(torch.nn.Module):
 
     Deliverable: Implement a class RotaryPositionalEmbedding that applies RoPE to the input tensor.
 
-    This basically amounts to creating the R rotation matrix and applying it.
+    This basically amounts to creating the R rotation matrix and applying it... but constructing
+    the specific instance of the R matrix that you will use to apply RoPE in the forward methods 
+    requires wrangling the indices i, k.
+    i is the position of a token within a given sequence ... (this may seem a bit weird
+    at first, that the rotation is not tied to the token's position or order in the vocabulary, 
+    but rather in the sequence, and that the same token willl be rotated differently based on its position
+    within a sequence, but this is actually fundamental to how rope (and positional encoding 
+    transformations in general) works.
+
+    There is one R matrix for each relative position i.
+    
+    , but RoPE forward method will normally combine
+    submatrices from many of the R_i of equation 9 (or R_i^k of Eqn 8) since it will probably be 
+    normal to feed sequences of tokens
     
     References:
     The RoPE paper is worth looking at.
@@ -354,7 +368,8 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         """
         Construct the RoPE module and create buffers if needed.
 
-        The init makes the values that are needed to populate the Rotation matrix.
+        The init makes the values that are needed to populate the Rotation matrix. 
+
         Parameters
         ----------
         theta: float 
@@ -362,10 +377,10 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         d_k: int 
             dimension of query and key vectors.
             This is the dimension of a vector that gets multiplied by the $R^{i}$ matrix.
-            This is not the embedding dimension. (if you were not doing multiheaded attention it would be).
+            This is not the embedding dimension (unless using single-headed attention).
             We do not need to worry about attention head splitting stuffs here.
             But if we wanted to mention them ... the embedding dimension d is split approximately evenly 
-            among the heads ... this module is conncerned with operations on one of those chunks.
+            among the heads ... this module is concerned with operations on one of those chunks.
             
         max_seq_len: int 
             Maximum sequence length that will be inputted.
@@ -378,15 +393,17 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         x = np.arange(5)
         exx = einx.rearrange(" a -> 1 1 a 1 2",x)
 
+        For a fixed position i, there will be k rotation submatrices.
+
         """
         super().__init__()
 
-        k = torch.arange(d_k//2, device=device)  # dimensions; shape (d_k//2,)
+        k = torch.arange(d_k//2, device=device)  # subspace dimensions; shape (d_k//2,)
         i = torch.arange(max_seq_len, device=device)   # positions; shape (max_seq_len,)
 
         # reshape to make rectangles
         k = einx.rearrange("a -> 1 a",k)  # shape(1,d_k//2)
-        i = einx.rearrange("a -> a 1",i) # shape(max_seq_len,1)
+        i = einx.rearrange("a -> a 1",i)  # shape(max_seq_len,1)
 
         assert isinstance(k, torch.Tensor) # just to make VS Code not complain
         assert isinstance(i, torch.Tensor) # just to make VS Code not complain
@@ -405,7 +422,12 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         # ...     
         # persistent=False says we dont care to store this in the praemters file
         # data dertived features (such as empirical average signal strength) may wish to be saved.
-
+        # Once registered we can access them via self.name (self.cosine_table for example)
+        #
+        # to see your buffers:
+        # print(list(self.named_buffers()))
+        #
+        # 
         self.register_buffer(
             name="cosine_table",
             tensor=cos_theta_i_k,
@@ -418,6 +440,22 @@ class RotaryPositionalEmbedding(torch.nn.Module):
             )
         return 
         
+    def get_rotation_submatrix(self, i: int, k:int):
+        """ return the R_i^k matrix from Equation 8"""
+        R = torch.eye(2) * self.cosine_table[i, k]
+        R[0,1] = -self.sine_table[i, k]
+        R[1,0] = self.sine_table[i, k]
+        return R        
+    
+    def get_R_i(self, i:int, k_over_2: int):
+        subspace_dimension = int(2 * k_over_2)
+        rope_matrix_dimension = (subspace_dimension, subspace_dimension)
+        R = np.zeros(rope_matrix_dimension)
+        for k in range(k_over_2):
+            Rik = self.get_rotation_submatrix(i, k)
+            R[2*k:2*k+2, 2*k:2*k+2] = Rik
+        return R
+
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         """
@@ -430,11 +468,54 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         You should use the token positions to slice your (possibly precomputed) cos and sin tensors along
         the sequence dimension.
 
+        When this is finally working it will take the following form:
+        - A tensor of shape (..., seq_len, d_k, d_k) will be formed called R
+        - A crafty application of einx will multiply every vector
+         in the input x, by the d_k x d_k array.
         Parameters
         ----------
         x: torch.Tensor
+            The embedded tokens that will be encoded with rotary operation
+            shape is (..., seq_len, d_k).
+            d_k should be even so that the elements can be paired over 2D rotation matrices.
         token_positions: torch.Tensor
+            A map of the token positions (within the sequence)
+            (..., seq_len)
+            These are going to be used to "seek into the cosine and sine tables"
+            ...
+            it seems like we can either compute the R matrices for these token positions, 
+            or we can sort the tokens and then use a sequential R ... but if these
+            are not just 1, 2, 3 ... seq_len .. then i guess
 
         """
         
-        pass
+        # Build the R matrix -- Just try to build this out in numpy and then
+        # translate to torch ... 
+
+        d_k = x.shape[-1]  # Defines the k-index (embedding attention subspace)
+        d_k_over_2 = d_k // 2  # num submatrices making up R_i
+        seq_len = x.shape[-2]  # This corresponds to the i-index
+        if np.mod(d_k,2) != 0:
+            logger.error(f"d_k should be even ... instead its {d_k}")
+        
+        # Allocate a container for the R matrices
+        # ... we'll do some einx "repmat" stuff afterwards to get the batch "..." dimension
+        R_single_batch = torch.zeros((seq_len, d_k, d_k))
+        for i in range(seq_len):
+            Ri = self.get_R_i(i=i, k_over_2=d_k_over_2)
+            R_single_batch[i, :, :] = Ri
+            print("now file this Ri into an appropriate" \
+            "dimension tensor")
+
+        
+        # Make the blocks for the block diagonal matrix:
+        list_of_block_matrices = d_k_over_2 * [ None]
+        for k in range(d_k_over_2): 
+            list_of_block_matrices[k] = self.get_rotation_matrix()
+        # once you have your list, cast it to a torch tensor
+        # now you have seq_len, d_k, d_k
+        # if you didnt care about memory ... you may be tempted to 
+
+            print("time to access sine and cos tables here")
+
+        # a_squared_einx = einx.dot("..., ... -> ...", a_float32, a_float32)
