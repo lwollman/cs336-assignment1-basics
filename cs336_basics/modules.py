@@ -472,9 +472,6 @@ class RotaryPositionalEmbedding(torch.nn.Module):
 
         """
         
-        # Build the R matrix -- Just try to build this out in numpy and then
-        # translate to torch ... 
-
         # d_k = x.shape[-1]  # Defines the k-index (embedding attention subspace)
         # d_k_over_2 = d_k // 2  # num submatrices making up R_i
         # seq_len = x.shape[-2]  # This corresponds to the i-index
@@ -489,8 +486,8 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         # reshape x to get the pairs for rotation
         pairs = einx.rearrange("... s (d c) -> ... s d c", x, c=2)
         rotated = torch.empty_like(pairs)
-        rotated[..., 0] = c * pairs[..., 0] + s * pairs[..., 1]
-        rotated[..., 1] = -s * pairs[..., 0] + c * pairs[..., 1]
+        rotated[..., 0] = c * pairs[..., 0] - s * pairs[..., 1]
+        rotated[..., 1] = s * pairs[..., 0] + c * pairs[..., 1]
 
         # reshape back to original shape (interleaved even/odd)
         rotated_vectors = einx.rearrange("... s d c -> ... s (d c)", rotated)
