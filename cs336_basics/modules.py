@@ -3,7 +3,9 @@
 
 """
 
+from jaxtyping import Float
 from loguru import logger
+from torch import Tensor
 from typing import Optional
 
 import einx
@@ -492,3 +494,39 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         # reshape back to original shape (interleaved even/odd)
         rotated_vectors = einx.rearrange("... s d c -> ... s (d c)", rotated)
         return rotated_vectors
+    
+
+class Softmax(torch.nn.Module):
+    """
+    Deliverable: Implement a Softmax class that inherits from torch.nn.Module and performs the softmax operation along the last dimension of the input tensor.
+
+    Note: You should not use nn.Softmax or nn.functional.softmax in your implementation.
+
+    To test your implementation, implement the test adapter at [adapters.run_softmax]. Then, run uv run pytest -k test_softmax.
+    """
+    def __init__(self, in_features):
+        """
+        Constructor.
+        """
+        super().__init__()
+
+    def forward(self, in_features: Float[Tensor, " ..."], dim: int) -> torch.Tensor:
+        """
+        Apply the softmax operation to the input tensor along the last dimension.
+
+        """
+        x = in_features
+        maxx = torch.max(x, dim=-dim, keepdim=True)
+        shifted_x = x - maxx  # now won't blow up from large exponents
+
+        exp_x = torch.exp(shifted_x)
+        norm_by = torch.sum(dim=dim, keepdim=True)
+
+        result = exp_x / norm_by
+
+        # # Subtract max for numerical stability
+        # x_max = torch.max(x, dim=-1, keepdim=True).values
+        # x_exp = torch.exp(x - x_max)
+        # sum_exp = torch.sum(x_exp, dim=-1, keepdim=True)
+        # softmax_result = x_exp / sum_exp
+        # return softmax_result
