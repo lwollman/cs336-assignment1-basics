@@ -496,31 +496,22 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         return rotated_vectors
     
 
-class Softmax(torch.nn.Module):
-    """
-    Deliverable: Implement a Softmax class that inherits from torch.nn.Module and performs the softmax operation along the last dimension of the input tensor.
-
-    Note: You should not use nn.Softmax or nn.functional.softmax in your implementation.
-
-    To test your implementation, implement the test adapter at [adapters.run_softmax]. Then, run uv run pytest -k test_softmax.
-    """
-    def __init__(self, in_features):
-        """
-        Constructor.
-        """
-        super().__init__()
-
-    def forward(self, in_features: Float[Tensor, " ..."], dim: int) -> torch.Tensor:
+def softmax(
+        in_features: Float[Tensor, " ..."], 
+        dim: int
+        ) -> torch.Tensor:
         """
         Apply the softmax operation to the input tensor along the last dimension.
 
         """
         x = in_features
-        maxx = torch.max(x, dim=-dim, keepdim=True)
+        print("softmax input shape:", x.shape)
+        maxx, _ = torch.max(x, dim=dim, keepdim=True)
+        print("max values shape:", maxx.shape)
         shifted_x = x - maxx  # now won't blow up from large exponents
 
         exp_x = torch.exp(shifted_x)
-        norm_by = torch.sum(dim=dim, keepdim=True)
+        norm_by = torch.sum(dim=dim, keepdim=True, input=exp_x)
 
         result = exp_x / norm_by
 
@@ -529,4 +520,64 @@ class Softmax(torch.nn.Module):
         # x_exp = torch.exp(x - x_max)
         # sum_exp = torch.sum(x_exp, dim=-1, keepdim=True)
         # softmax_result = x_exp / sum_exp
-        # return softmax_result
+        return result
+
+def scaled_dot_product_attention(
+    queries: Float[Tensor, " ... queries d_k"],
+    keys: Float[Tensor, " ... key d_k"],
+    values: Float[Tensor, " ... key d_v"],
+    mask: Optional[Float[Tensor, " ... queries key"]] = None,
+    ) -> Float[Tensor, " ... queries d_v"]:
+    """
+    Deliverable: Implement the scaled dot-product attention (SDPA) mechanism as a function.
+
+    Note: You should not use nn.MultiheadAttention or nn.functional.multi_head_attention_forward in your implementation.
+
+    To test your implementation, implement the test adapter at [adapters.run_sdpa]. Then, run 
+    uv run pytest -k test_sdpa.
+
+    Parameters:
+        queries: Float[Tensor, " ... queries d_k"]: Query tensor.
+        keys: Float[Tensor, " ... key d_k"]: Key tensor.
+        values: Float[Tensor, " ... key d_v"]: Value tensor.
+        mask: Optional[Float[Tensor, " ... queries key"]]: Optional mask tensor.
+
+    Returns:
+        Float[Tensor, " ... queries d_v"]: Output of SDPA.
+    """
+    # use torch nicenes to multiply QK with ...
+    print("queries shape:", queries.shape)
+    print("keys shape:", keys.shape)
+    print("values shape:", values.shape)
+    print("mask shape:", mask.shape)
+
+    dk = keys.shape[-1]
+    qk = einx.dot("... q dk, ... k dk -> ... q k", queries, keys)
+    qk = qk / math.sqrt(dk)  # normalize by sqrt d_k
+    # print("mask shape:", mask.shape)
+    # float_mask = mask.to(dtype=torch.float32)
+     # apply the mask (if any)
+    print("Applying mask...")
+    print(mask)
+    print("qk shape:", qk.shape)
+    min_qk_elt = torch.min(qk) + float("-inf") #
+    print(min_qk_elt, "min qk elt")
+     # masked_fill_ modifies in place
+    masked_qk = qk.clone()
+    #masked_qk.masked_fill_(~mask, min_qk_elt)  #
+    masked_qk[~mask] = min_qk_elt
+
+    print("masked_qk shape:", masked_qk.shape)
+    print(masked_qk)
+    # masked_qk = einx.dot("..., ... -> ...", qk, float_mask) + (1.0 - float_mask) # * (-1e9)
+    softmaxed_masked_qk = softmax(masked_qk, dim=-1)
+    print(softmaxed_masked_qk.shape)
+    print(values.shape)
+     # finally multiply by V
+    A = einx.dot("... n m, ... m dv -> ... n dv", softmaxed_masked_qk, values)
+    
+    print("helloworld")
+    
+    # # muutliply the above by V (also using the ...)
+    # raise NotImplementedError
+    return A

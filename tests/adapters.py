@@ -136,8 +136,8 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
-
+    return homework.scaled_dot_product_attention(Q, K, V, mask)    # Nothing trainable in SDPA so skip "load state dict"
+    
 
 def run_multihead_self_attention(
     d_model: int,
@@ -242,7 +242,6 @@ def run_rope(
         x=in_query_or_key, 
         token_positions=token_positions
         )
-
 
 
 def run_transformer_block(
@@ -428,7 +427,6 @@ def run_rmsnorm(
     return rmsnorm_instance.forward(in_features)
 
 
-
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
     """Given a tensor of inputs, return the output of applying SiLU
     to each element.
@@ -479,12 +477,8 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    softmax = homework.Softmax(
-        in_features=in_features,
-        dim=dim
-    )
     # Nothing trainable in softmax so skip "load state dict"
-    return softmax.forward(in_features)
+    return homework.softmax(in_features, dim=dim)
 
 
 def run_cross_entropy(
