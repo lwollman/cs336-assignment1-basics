@@ -581,3 +581,15 @@ def scaled_dot_product_attention(
     # # muutliply the above by V (also using the ...)
     # raise NotImplementedError
     return A
+
+class MultiheadedSelfAttention(torch.nn.Module):
+    """
+    Deliverable: Implement multi-headed self-attention as a torch.nn.Module.
+
+    Note: You should not use nn.MultiheadAttention or nn.functional.multi_head_attention_forward in your implementation.
+
+    To test your implementation, implement the test adapter at [adapters.run_mhsa]. Then, run uv run pytest -k test_mhsa.
+    """
+
+    
+    raise NotImplementedError

@@ -170,6 +170,18 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
+    print("shape check")
+    mhsa = homework.MultiheadedSelfAttention(
+        d_model=d_model,
+        num_heads=num_heads,
+    )
+    mhsa.load_state_dict({
+        "q_proj.weights": q_proj_weight,
+        "k_proj.weights": k_proj_weight,
+        "v_proj.weights": v_proj_weight,
+        "output_proj.weights": o_proj_weight,
+    })
+    return mhsa.forward(in_features)
     raise NotImplementedError
 
 
