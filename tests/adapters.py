@@ -174,7 +174,11 @@ def run_multihead_self_attention(
     mhsa = homework.MultiheadedSelfAttention(
         d_model=d_model,
         num_heads=num_heads,
-    )
+        q_proj_weight=q_proj_weight,
+        k_proj_weight=k_proj_weight,
+        v_proj_weight=v_proj_weight,
+        o_proj_weight=o_proj_weight,
+        )
     mhsa.load_state_dict({
         "q_proj.weights": q_proj_weight,
         "k_proj.weights": k_proj_weight,
@@ -182,7 +186,7 @@ def run_multihead_self_attention(
         "output_proj.weights": o_proj_weight,
     })
     return mhsa.forward(in_features)
-    raise NotImplementedError
+
 
 
 def run_multihead_self_attention_with_rope(

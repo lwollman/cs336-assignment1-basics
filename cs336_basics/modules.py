@@ -557,29 +557,25 @@ def scaled_dot_product_attention(
     # print("mask shape:", mask.shape)
     # float_mask = mask.to(dtype=torch.float32)
      # apply the mask (if any)
-    print("Applying mask...")
-    print(mask)
-    print("qk shape:", qk.shape)
+    # print("Applying mask...")
+    # print(mask)
+    # print("qk shape:", qk.shape)
     min_qk_elt = torch.min(qk) + float("-inf") #
-    print(min_qk_elt, "min qk elt")
+    # print(min_qk_elt, "min qk elt")
      # masked_fill_ modifies in place
     masked_qk = qk.clone()
     #masked_qk.masked_fill_(~mask, min_qk_elt)  #
     masked_qk[~mask] = min_qk_elt
 
-    print("masked_qk shape:", masked_qk.shape)
-    print(masked_qk)
+    #print("masked_qk shape:", masked_qk.shape)
+    # print(masked_qk)
     # masked_qk = einx.dot("..., ... -> ...", qk, float_mask) + (1.0 - float_mask) # * (-1e9)
     softmaxed_masked_qk = softmax(masked_qk, dim=-1)
-    print(softmaxed_masked_qk.shape)
-    print(values.shape)
+    #print(softmaxed_masked_qk.shape)
+    # print(values.shape)
      # finally multiply by V
     A = einx.dot("... n m, ... m dv -> ... n dv", softmaxed_masked_qk, values)
     
-    print("helloworld")
-    
-    # # muutliply the above by V (also using the ...)
-    # raise NotImplementedError
     return A
 
 class MultiheadedSelfAttention(torch.nn.Module):
@@ -589,7 +585,110 @@ class MultiheadedSelfAttention(torch.nn.Module):
     Note: You should not use nn.MultiheadAttention or nn.functional.multi_head_attention_forward in your implementation.
 
     To test your implementation, implement the test adapter at [adapters.run_mhsa]. Then, run uv run pytest -k test_mhsa.
+
+    Development notes
     """
 
-    
-    raise NotImplementedError
+    def __init__(
+            self,
+            d_model: int,
+            num_heads: int,
+            q_proj_weight: Float[Tensor, " d_model d_k * num_heads"],
+            k_proj_weight: Float[Tensor, " d_model d_k * num_heads"],
+            v_proj_weight: Float[Tensor, " d_model d_v * num_heads"],
+            o_proj_weight: Float[Tensor, " d_model d_model"],
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+            ):          
+        """
+        Constructor.
+
+        Parameters
+        ----------
+        d_model : int
+            Hidden dimension of the model.
+            i.e. the dimension of the vector space into which the tokens are embedded.
+        num_heads : int
+            Number of attention heads.
+        q_proj_weight : Float[Tensor, " d_model d_k * num_heads"]
+            Query projection weights.
+        k_proj_weight : Float[Tensor, " d_model d_k * num_heads"]
+            Key projection weights.
+        v_proj_weight : Float[Tensor, " d_model d_v * num_heads"]
+            Value projection weights.
+        o_proj_weight : Float[Tensor, " d_model d_model"]
+            Output projection weights.
+    """
+        super().__init__()
+        self.num_heads = num_heads
+        self.d_model = d_model
+        # per Pdf: page 26 (Vaswani et al. 2017)
+        d_k = d_model // num_heads
+        d_v = d_k  # usually d_v == d_k, cross attention may differ
+
+        # To implement multi-headed attention,
+        # we need to split the inputs into heads
+        # then loop over the heads, applying out attention mechanism
+        # then concatenate the results (this is equations 12-13 in the notes)
+        #. d_k can be thought of as the "query size"
+        self.Q = Linear(
+            in_features=d_model,
+            out_features=d_k * num_heads,
+            device=device,
+            dtype=dtype
+            )
+        self.K = Linear(
+            in_features=d_model,
+            out_features=d_k * num_heads,
+            device=device,
+            dtype=dtype
+            )
+        self.V = Linear(
+            in_features=d_model,
+            out_features=d_v * num_heads,  # this is d_model in most cases
+            device=device,
+            dtype=dtype
+            )
+        self.O = Linear(
+            in_features=d_v * num_heads,
+            out_features=d_model,
+            device=device,
+            dtype=dtype
+            )
+        
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Development notes:
+                # To implement multi-headed attention,
+        # we need to split the inputs into heads
+        # then loop over the heads, applying out attention mechanism
+        # then concatenate the results (this is equations 12-13 in the notes)
+        - We will use einx to help with the reshaping and combining of the heads.
+
+        Parameters
+        ----------
+        x: torch.Tensor
+            Input tensor of shape (batch_size, seq_len, d_model).
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (batch_size, seq_len, d_model).
+        """
+        d_k = d_model // num_heads
+        d_v = d_model // num_heads
+
+        Q = self.Q(x)  # shape (batch_size, seq_len, d_model)
+        K = self.K(x)  # shape (batch_size, seq_len, d_model)
+        V = self.V(x)  # shape (batch_size, seq_len, d_model
+
+        # reshape Q, K, V to (batch_size, num_heads, seq_len, d_k)
+        Q_reshaped = einx.rearrange("b s (h dk) -> b h s dk", Q, h=num_heads)  # ummm b h s dk or b s h dk?
+        
+        # next step is apply our attenation mechanism per head
+
+        # then we concatenate the results (undo the reshaping)
+
+        # the masking stuff ... and rope ... are TBD
+        raise NotImplementedError        
+        return None
