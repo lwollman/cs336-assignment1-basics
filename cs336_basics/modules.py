@@ -523,22 +523,29 @@ def softmax(
         return result
 
 def scaled_dot_product_attention(
-    queries: Float[Tensor, " ... queries d_k"],
-    keys: Float[Tensor, " ... key d_k"],
-    values: Float[Tensor, " ... key d_v"],
+    queries: Float[Tensor, " ... seq_len d_k"],
+    keys: Float[Tensor, " ... seq_len d_k"],
+    values: Float[Tensor, " ... seq_len d_v"],
     mask: Optional[Float[Tensor, " ... queries key"]] = None,
     ) -> Float[Tensor, " ... queries d_v"]:
     """
     Deliverable: Implement the scaled dot-product attention (SDPA) mechanism as a function.
 
-    Note: You should not use nn.MultiheadAttention or nn.functional.multi_head_attention_forward in your implementation.
+    Your implementation should handle keys and queries of shape (batch_size, ..., seq_len, d_k).
+
+    Note: You should not use nn.MultiheadAttention or nn.functional.multi_head_attention_forward 
+    in your implementation.
 
     To test your implementation, implement the test adapter at [adapters.run_sdpa]. Then, run 
     uv run pytest -k test_sdpa.
 
+    TODO: Review the shapes of these inputs .. the assignment seems to call for the second
+    last dimension of q,k,v being "seq_len", but the auto AI doc, had the second last mode
+    being same for for Q,K, but allow different for V.
+
     Parameters:
-        queries: Float[Tensor, " ... queries d_k"]: Query tensor.
-        keys: Float[Tensor, " ... key d_k"]: Key tensor.
+        queries: Float[Tensor, " ... queries d_k"]: Query tensor. 
+        keys: Float[Tensor, " ... queries d_k"]: Key tensor.
         values: Float[Tensor, " ... key d_v"]: Value tensor.
         mask: Optional[Float[Tensor, " ... queries key"]]: Optional mask tensor.
 
@@ -546,23 +553,31 @@ def scaled_dot_product_attention(
         Float[Tensor, " ... queries d_v"]: Output of SDPA.
     """
     # use torch nicenes to multiply QK with ...
-    print("queries shape:", queries.shape)
-    print("keys shape:", keys.shape)
-    print("values shape:", values.shape)
-    print("mask shape:", mask.shape)
+    logger.info("Shape check:")
+    logger.info(f"queries : {queries.shape}")
+    logger.info(f"keys : {keys.shape}")
+    logger.info(f"values : {values.shape}")
+    logger.info(f"mask : {mask.shape}")
+
 
     dk = keys.shape[-1]
+    dv = values.shape[-1]
+    # seq_len = dk = keys.shape[-2]
+    # assert values.shape[-2] == seq_len
+    
+    logger.info(f"d_k: {dk}")
+    logger.info(f"d_v: {dv}")
     qk = einx.dot("... q dk, ... k dk -> ... q k", queries, keys)
     qk = qk / math.sqrt(dk)  # normalize by sqrt d_k
+
+
     # print("mask shape:", mask.shape)
     # float_mask = mask.to(dtype=torch.float32)
      # apply the mask (if any)
-    # print("Applying mask...")
-    # print(mask)
     # print("qk shape:", qk.shape)
     min_qk_elt = torch.min(qk) + float("-inf") #
     # print(min_qk_elt, "min qk elt")
-     # masked_fill_ modifies in place
+    # masked_fill_ modifies in place
     masked_qk = qk.clone()
     #masked_qk.masked_fill_(~mask, min_qk_elt)  #
     masked_qk[~mask] = min_qk_elt
@@ -684,7 +699,13 @@ class MultiheadedSelfAttention(torch.nn.Module):
 
         # reshape Q, K, V to (batch_size, num_heads, seq_len, d_k)
         Q_reshaped = einx.rearrange("b s (h dk) -> b h s dk", Q, h=num_heads)  # ummm b h s dk or b s h dk?
-        
+        # To check the reshaping, lets look at the inputs to attention
+    #     scaled_dot_product_attention(
+    # queries: Float[Tensor, " ... queries d_k"],
+    # keys: Float[Tensor, " ... key d_k"],
+    # values: Float[Tensor, " ... key d_v"],
+    # mask: Optional[Float[Tensor, " ... queries key"]] = None,
+    # ) -> Float[Tensor, " ... queries d_v"]: 
         # next step is apply our attenation mechanism per head
 
         # then we concatenate the results (undo the reshaping)
