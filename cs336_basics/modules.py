@@ -54,7 +54,7 @@ class Linear(torch.nn.Module):
             b=0.02
             )
         weights = torch.nn.Parameter(weights)  # The casting as Parameter designates this as learnable
-        self.weights = weights
+        self.weights = weights  # cause state_dict to track weights
         # print("std has an unconventional value, shoudl be 1")
 
     
@@ -523,15 +523,17 @@ def softmax(
         return result
 
 def scaled_dot_product_attention(
-    queries: Float[Tensor, " ... seq_len d_k"],
-    keys: Float[Tensor, " ... seq_len d_k"],
-    values: Float[Tensor, " ... seq_len d_v"],
+    queries: Float[Tensor, " ... n d_k"],
+    keys: Float[Tensor, " ... m d_k"],
+    values: Float[Tensor, " ... m d_v"],
     mask: Optional[Float[Tensor, " ... queries key"]] = None,
     ) -> Float[Tensor, " ... queries d_v"]:
     """
     Deliverable: Implement the scaled dot-product attention (SDPA) mechanism as a function.
 
+    ** from the assignment: ... but this looks like an error, the seq_len for q, k are not equal in general.**
     Your implementation should handle keys and queries of shape (batch_size, ..., seq_len, d_k).
+
 
     Note: You should not use nn.MultiheadAttention or nn.functional.multi_head_attention_forward 
     in your implementation.
@@ -541,7 +543,15 @@ def scaled_dot_product_attention(
 
     TODO: Review the shapes of these inputs .. the assignment seems to call for the second
     last dimension of q,k,v being "seq_len", but the auto AI doc, had the second last mode
-    being same for for Q,K, but allow different for V.
+    being same for for Q,K, but allow different for V.  The reality seems to be k,v agree in the second
+    last mode, anbd q can be different (n,m)
+    these m,n relate to sequence length concept though, where as d_k is the token-subspace dimension.
+    It is along this d_k that the inner products are taken.
+
+    Learning Notes:
+    - The attention scores are computed as the dot product of queries and keys, scaled by the
+      square root of the key dimension (d_k).
+      The dimension d_k is the only one that it makes sense to take an inner product over.
 
     Parameters:
         queries: Float[Tensor, " ... queries d_k"]: Query tensor. 
@@ -689,6 +699,7 @@ class MultiheadedSelfAttention(torch.nn.Module):
         -------
         torch.Tensor
             Output tensor of shape (batch_size, seq_len, d_model).
+            Unexpected key(s) in state_dict: "q_proj.weights", "k_proj.weights", "v_proj.weights", "output_proj.weights".
         """
         d_k = d_model // num_heads
         d_v = d_model // num_heads
@@ -696,7 +707,13 @@ class MultiheadedSelfAttention(torch.nn.Module):
         Q = self.Q(x)  # shape (batch_size, seq_len, d_model)
         K = self.K(x)  # shape (batch_size, seq_len, d_model)
         V = self.V(x)  # shape (batch_size, seq_len, d_model
-
+        logger.info("Shape check:")
+        logger.info(f"queries : {Q.shape}")
+        logger.info(f"keys : {K.shape}")
+        logger.info(f"values : {V.shape}")
+        logger.info(f"mask : {mask.shape}")
+        logger.info(f"d_k: {d_k}")
+        logger.info(f"d_v: {d_v}")
         # reshape Q, K, V to (batch_size, num_heads, seq_len, d_k)
         Q_reshaped = einx.rearrange("b s (h dk) -> b h s dk", Q, h=num_heads)  # ummm b h s dk or b s h dk?
         # To check the reshaping, lets look at the inputs to attention
