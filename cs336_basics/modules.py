@@ -589,18 +589,15 @@ def scaled_dot_product_attention(
     # apply the mask if given:
     min_qk_elt = torch.min(qk) + float("-inf") #
         
-    if mask is not None:
-        masked_qk = qk.clone()
-        # masked_fill_ modifies in place
-        #masked_qk.masked_fill_(~mask, min_qk_elt)  #
-        masked_qk[~mask] = min_qk_elt
-        # masked_qk = einx.dot("..., ... -> ...", qk, float_mask) + (1.0 - float_mask) # * (-1e9)
-        softmaxed_masked_qk = softmax(masked_qk, dim=-1)
-    else:
-        # may want to provide "triangular" mask for causal attention (i.e. no looky into the future)
-        softmaxed_masked_qk = softmax(qk, dim=-1)
-    #print(softmaxed_masked_qk.shape)
-    
+    # do masking
+    masked_qk = qk.clone()
+    masked_qk[~mask] = min_qk_elt
+    softmaxed_masked_qk = softmax(masked_qk, dim=-1)
+
+    # old cruft here:    
+    # masked_qk.masked_fill_(~mask, min_qk_elt)  # masked_fill_ modifies in place
+    # masked_qk = einx.dot("..., ... -> ...", qk, float_mask) + (1.0 - float_mask) # * (-1e9)
+
     # finally multiply by V
     A = einx.dot("... n m, ... m dv -> ... n dv", softmaxed_masked_qk, values)
     
