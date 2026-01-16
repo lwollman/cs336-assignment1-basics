@@ -534,12 +534,12 @@ def scaled_dot_product_attention(
     ** from the assignment: ... but this looks like an error, the seq_len for q, k are not equal in general.**
     Your implementation should handle keys and queries of shape (batch_size, ..., seq_len, d_k).
 
-
     Note: You should not use nn.MultiheadAttention or nn.functional.multi_head_attention_forward 
     in your implementation.
 
     To test your implementation, implement the test adapter at [adapters.run_sdpa]. Then, run 
     uv run pytest -k test_sdpa.
+    uv run pytest -k test_scaled_dot_product_attention
 
     TODO: Review the shapes of these inputs .. the assignment seems to call for the second
     last dimension of q,k,v being "seq_len", but the auto AI doc, had the second last mode
@@ -567,7 +567,22 @@ def scaled_dot_product_attention(
     logger.info(f"queries : {queries.shape}")
     logger.info(f"keys : {keys.shape}")
     logger.info(f"values : {values.shape}")
-    logger.info(f"mask : {mask.shape}")
+    if mask is not None:
+        logger.info(f"mask : {mask.shape}")
+    else: 
+        logger.error("mask : None")
+        # num_heads = queries.shape[-3] if len(queries.shape) >=3 else 1
+        # logger.info("no mask provided")
+        # mask = torch.tril(torch.ones(queries.shape[-2], keys.shape[-2], dtype=torch.bool, device=queries.device))
+        # logger.info(f"generated causal mask of shape: {mask.shape}")
+        # mask = einx.rearrange(" q k -> 1 q k", mask)  # broadcast to match batch and head dims
+        # logger.info(f"generated causal mask of shape. after rearrange: {mask.shape}")
+        # mask = mask.repeat_interleave(num_heads, dim=0)  # repeat for each head
+        # for _ in range(len(queries.shape) - 3):
+        #     mask = mask.unsqueeze(0)  # add batch dims
+        #     print(mask.shape)
+        #     print(mask)
+        # logger.info(f"generated causal mask of shape. after repeat: {mask.shape}") 
 
 
     dk = keys.shape[-1]
@@ -580,25 +595,24 @@ def scaled_dot_product_attention(
     qk = einx.dot("... q dk, ... k dk -> ... q k", queries, keys)
     qk = qk / math.sqrt(dk)  # normalize by sqrt d_k
 
-
-    # print("mask shape:", mask.shape)
     # float_mask = mask.to(dtype=torch.float32)
-     # apply the mask (if any)
-    # print("qk shape:", qk.shape)
-    min_qk_elt = torch.min(qk) + float("-inf") #
-    # print(min_qk_elt, "min qk elt")
-    # masked_fill_ modifies in place
-    masked_qk = qk.clone()
-    #masked_qk.masked_fill_(~mask, min_qk_elt)  #
-    masked_qk[~mask] = min_qk_elt
 
-    #print("masked_qk shape:", masked_qk.shape)
-    # print(masked_qk)
-    # masked_qk = einx.dot("..., ... -> ...", qk, float_mask) + (1.0 - float_mask) # * (-1e9)
-    softmaxed_masked_qk = softmax(masked_qk, dim=-1)
+    # apply the mask if given:
+    min_qk_elt = torch.min(qk) + float("-inf") #
+        
+    if mask is not None:
+        masked_qk = qk.clone()
+        # masked_fill_ modifies in place
+        #masked_qk.masked_fill_(~mask, min_qk_elt)  #
+        masked_qk[~mask] = min_qk_elt
+        # masked_qk = einx.dot("..., ... -> ...", qk, float_mask) + (1.0 - float_mask) # * (-1e9)
+        softmaxed_masked_qk = softmax(masked_qk, dim=-1)
+    else:
+        # may want to provide "triangular" mask for causal attention (i.e. no looky into the future)
+        softmaxed_masked_qk = softmax(qk, dim=-1)
     #print(softmaxed_masked_qk.shape)
-    # print(values.shape)
-     # finally multiply by V
+    
+    # finally multiply by V
     A = einx.dot("... n m, ... m dv -> ... n dv", softmaxed_masked_qk, values)
     
     return A
@@ -609,7 +623,11 @@ class MultiheadedSelfAttention(torch.nn.Module):
 
     Note: You should not use nn.MultiheadAttention or nn.functional.multi_head_attention_forward in your implementation.
 
-    To test your implementation, implement the test adapter at [adapters.run_mhsa]. Then, run uv run pytest -k test_mhsa.
+    To test your implementation, implement the test adapter at [adapters.run_mhsa]. Then, run 
+    
+    uv run pytest -k test_mhsa.
+    uv run pytest -k test_multihead_self_attention
+    uv run pytest -s -v tests/test_model.py::test_multihead_self_attention
 
     Development notes
     """
@@ -618,10 +636,6 @@ class MultiheadedSelfAttention(torch.nn.Module):
             self,
             d_model: int,
             num_heads: int,
-            q_proj_weight: Float[Tensor, " d_model d_k * num_heads"],
-            k_proj_weight: Float[Tensor, " d_model d_k * num_heads"],
-            v_proj_weight: Float[Tensor, " d_model d_v * num_heads"],
-            o_proj_weight: Float[Tensor, " d_model d_model"],
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
             ):          
@@ -701,32 +715,58 @@ class MultiheadedSelfAttention(torch.nn.Module):
             Output tensor of shape (batch_size, seq_len, d_model).
             Unexpected key(s) in state_dict: "q_proj.weights", "k_proj.weights", "v_proj.weights", "output_proj.weights".
         """
-        d_k = d_model // num_heads
-        d_v = d_model // num_heads
+        d_k = self.d_model // self.num_heads
+        d_v = self.d_model // self.num_heads
 
         Q = self.Q(x)  # shape (batch_size, seq_len, d_model)
         K = self.K(x)  # shape (batch_size, seq_len, d_model)
         V = self.V(x)  # shape (batch_size, seq_len, d_model
-        logger.info("Shape check:")
+        logger.info(f"Shape check: {__class__.__name__}")
         logger.info(f"queries : {Q.shape}")
         logger.info(f"keys : {K.shape}")
         logger.info(f"values : {V.shape}")
-        logger.info(f"mask : {mask.shape}")
         logger.info(f"d_k: {d_k}")
         logger.info(f"d_v: {d_v}")
+
         # reshape Q, K, V to (batch_size, num_heads, seq_len, d_k)
-        Q_reshaped = einx.rearrange("b s (h dk) -> b h s dk", Q, h=num_heads)  # ummm b h s dk or b s h dk?
-        # To check the reshaping, lets look at the inputs to attention
-    #     scaled_dot_product_attention(
-    # queries: Float[Tensor, " ... queries d_k"],
-    # keys: Float[Tensor, " ... key d_k"],
-    # values: Float[Tensor, " ... key d_v"],
-    # mask: Optional[Float[Tensor, " ... queries key"]] = None,
+        Q_reshaped = einx.rearrange("b s (h dk) -> b h s dk", Q, h=self.num_heads)  # ummm b h s dk or b s h dk?
+        K_reshaped = einx.rearrange("b s (h dk) -> b h s dk", K, h=self.num_heads)
+        V_reshaped = einx.rearrange("b s (h dv) -> b h s dv", V, h=self.num_heads)  
+        
+        # TODO: Add causal masking .. this is going to be a simple triangular matrix, 
+        # but the twist is a high dim torch tensor. ... however, we basically want the 
+        # attention mechanism to consider ... ? what? You passed it some stuff ... 
+        # and you want it to be "considered" by the attention ... yet somehow we 
+        # are thinking about treating it as the first token only, then the first two, then the 
+        # first 3 ...something seems amiss here .. 
+        # actually, for training this triangular mask is not concerning,
+        # and for inference, we won't need this -- so no worries:).
+
+        # rope is next (TODO)        
+        # make the mask here ...
+        mask = torch.tril(torch.ones(Q_reshaped.shape[-2], K_reshaped.shape[-2], dtype=torch.bool, device=Q_reshaped.device))
+        mask = mask.to(dtype=torch.bool)
+        logger.info(f"generated causal mask of shape: {mask.shape}")
+        mask = einx.rearrange(" q k ->1 1 q k", mask)  # broadcast to match batch and head dims
+        #logger.info(f"generated causal mask of shape. after rearrange: {mask.shape}")
+        mask = mask.repeat_interleave(self.num_heads, dim=0)  # repeat for each head
+        mask = mask.repeat_interleave(self.num_heads, dim=1)  # repeat for each head
+        logger.info(f"generated causal mask of shape. after repeat: {mask.shape}") 
+
+        A_for_all_heads_needs_reshaping = scaled_dot_product_attention(
+            Q_reshaped, K_reshaped, V_reshaped, mask=mask)
+
+	# Contcatenation over the heads
+        A_reshaped = einx.rearrange(
+            "b h s dv -> b s (h dv)", 
+            A_for_all_heads_needs_reshaping,
+            )  # concatenate heads
+        output = self.O(A_reshaped)  # shape (batch_size, seq_len, d_model)
+    
     # ) -> Float[Tensor, " ... queries d_v"]: 
         # next step is apply our attenation mechanism per head
 
         # then we concatenate the results (undo the reshaping)
 
         # the masking stuff ... and rope ... are TBD
-        raise NotImplementedError        
-        return None
+        return output

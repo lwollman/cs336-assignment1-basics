@@ -4,6 +4,7 @@ import os
 from typing import IO, Any, BinaryIO
 from collections.abc import Iterable
 from jaxtyping import Float, Int
+from loguru import logger
 
 import numpy.typing as npt
 import torch
@@ -170,14 +171,18 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    print("shape check")
+    logger.info("shape check")
+    logger.info(f"d_model = {d_model}")
+    logger.info(f"num_heads = {num_heads}")
+    logger.info(f"q_proj_weight = {q_proj_weight.shape}")
+    logger.info(f"k_proj_weight = {k_proj_weight.shape}")
+    logger.info(f"v_proj_weight = {v_proj_weight.shape}")
+    logger.info(f"o_proj_weight = {o_proj_weight.shape}")
+    logger.info(f"in_features = {in_features.shape}")  # I think this is telling us the true seq_len ... 12 in the test.
+    
     mhsa = homework.MultiheadedSelfAttention(
         d_model=d_model,
         num_heads=num_heads,
-        q_proj_weight=q_proj_weight,
-        k_proj_weight=k_proj_weight,
-        v_proj_weight=v_proj_weight,
-        o_proj_weight=o_proj_weight,
         )
     mhsa.load_state_dict({
         "Q.weights": q_proj_weight,
