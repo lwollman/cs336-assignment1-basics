@@ -231,6 +231,35 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
+    logger.info("args and shape check")
+    logger.info(f"d_model = {d_model}")
+    logger.info(f"num_heads = {num_heads}")
+    logger.info(f"max_seq_len = {max_seq_len}")
+    logger.info(f"theta = {theta}")
+    logger.info(f"q_proj_weight = {q_proj_weight.shape}")
+    logger.info(f"k_proj_weight = {k_proj_weight.shape}")
+    logger.info(f"v_proj_weight = {v_proj_weight.shape}")
+    logger.info(f"o_proj_weight = {o_proj_weight.shape}")
+    logger.info(f"in_features = {in_features.shape}")  # I think this is telling us the true seq_len ... 12 in the test.
+    logger.info(f"token_positions = {token_positions.shape}")
+    
+
+    
+    mhsa = homework.MultiheadedSelfAttention(
+        d_model=d_model,
+        num_heads=num_heads,
+        rope_params={
+            "max_seq_len": max_seq_len,
+            "theta": theta,
+        },
+        )
+    mhsa.load_state_dict({
+        "Q.weights": q_proj_weight,
+        "K.weights": k_proj_weight,
+        "V.weights": v_proj_weight,
+        "O.weights": o_proj_weight,
+    })
+    return mhsa.forward(in_features)
     raise NotImplementedError
 
 

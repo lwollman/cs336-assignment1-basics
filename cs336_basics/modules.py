@@ -418,8 +418,7 @@ class RotaryPositionalEmbedding(torch.nn.Module):
 
         # Put these into a "buffer" as they are not learned things ... 
         # We used the "parameter" designation for things that are learned .. 
-        # whereas, these, that are 
-        # the buffers are designations for quantities we want to keep around (for efficiency)
+        # whereas, these "buffers" are designations for quantities we want to keep around (for efficiency)
         # and are static -- not learned,
         # ...     
         # persistent=False says we dont care to store this in the praemters file
@@ -428,7 +427,6 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         #
         # to see your buffers:
         # print(list(self.named_buffers()))
-        #
         # 
         self.register_buffer(
             name="cosine_table",
@@ -625,8 +623,10 @@ class MultiheadedSelfAttention(torch.nn.Module):
             self,
             d_model: int,
             num_heads: int,
+            rope_params: Optional[dict] = None,
             device: Optional[torch.device] = None,
             dtype: Optional[torch.dtype] = None,
+
             ):          
         """
         Constructor.
@@ -650,6 +650,7 @@ class MultiheadedSelfAttention(torch.nn.Module):
         super().__init__()
         self.num_heads = num_heads
         self.d_model = d_model
+        self.rope_params = rope_params
         # per Pdf: page 26 (Vaswani et al. 2017)
         d_k = d_model // num_heads
         d_v = d_k  # usually d_v == d_k, cross attention may differ
@@ -717,7 +718,18 @@ class MultiheadedSelfAttention(torch.nn.Module):
         K_reshaped = einx.rearrange("b s (h dk) -> b h s dk", K, h=self.num_heads)
         V_reshaped = einx.rearrange("b s (h dv) -> b h s dv", V, h=self.num_heads)  
         
-        # rope is next (TODO)        
+        # rope is next (TODO)       
+        if self.rope_params is not None:
+            rope_operator = RotaryPositionalEmbedding(
+                theta=10000.0,
+                d_k=d_k,
+                max_seq_len=x.shape[1],
+                device=x.device
+                )
+            token_positions = torch.arange(x.shape[1], device=x.device)
+            Q_reshaped = rope_operator.forward(Q_reshaped, token_positions)
+            K_reshaped = rope_operator.forward(K_reshaped, token_positions)
+             
         # make the mask here ...
         mask = torch.tril(torch.ones(Q_reshaped.shape[-2], K_reshaped.shape[-2], dtype=torch.bool, device=Q_reshaped.device))
         mask = mask.to(dtype=torch.bool)
