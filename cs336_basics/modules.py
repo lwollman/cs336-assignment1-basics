@@ -615,7 +615,10 @@ class MultiheadedSelfAttention(torch.nn.Module):
     uv run pytest -k test_multihead_self_attention
     uv run pytest -s -v tests/test_model.py::test_multihead_self_attention
 
-    Development notes
+    Development notes:
+    To implement multi-headed attention, we need to split the inputs into heads
+    then loop over the heads, applying out attention mechanism then concatenate the results 
+    (this is equations 12-13 in the notes). d_k can be thought of as the "query size"
     """
 
     def __init__(
@@ -651,11 +654,6 @@ class MultiheadedSelfAttention(torch.nn.Module):
         d_k = d_model // num_heads
         d_v = d_k  # usually d_v == d_k, cross attention may differ
 
-        # To implement multi-headed attention,
-        # we need to split the inputs into heads
-        # then loop over the heads, applying out attention mechanism
-        # then concatenate the results (this is equations 12-13 in the notes)
-        #. d_k can be thought of as the "query size"
         self.Q = Linear(
             in_features=d_model,
             out_features=d_k * num_heads,
@@ -719,15 +717,6 @@ class MultiheadedSelfAttention(torch.nn.Module):
         K_reshaped = einx.rearrange("b s (h dk) -> b h s dk", K, h=self.num_heads)
         V_reshaped = einx.rearrange("b s (h dv) -> b h s dv", V, h=self.num_heads)  
         
-        # TODO: Add causal masking .. this is going to be a simple triangular matrix, 
-        # but the twist is a high dim torch tensor. ... however, we basically want the 
-        # attention mechanism to consider ... ? what? You passed it some stuff ... 
-        # and you want it to be "considered" by the attention ... yet somehow we 
-        # are thinking about treating it as the first token only, then the first two, then the 
-        # first 3 ...something seems amiss here .. 
-        # actually, for training this triangular mask is not concerning,
-        # and for inference, we won't need this -- so no worries:).
-
         # rope is next (TODO)        
         # make the mask here ...
         mask = torch.tril(torch.ones(Q_reshaped.shape[-2], K_reshaped.shape[-2], dtype=torch.bool, device=Q_reshaped.device))
@@ -742,17 +731,11 @@ class MultiheadedSelfAttention(torch.nn.Module):
         A_for_all_heads_needs_reshaping = scaled_dot_product_attention(
             Q_reshaped, K_reshaped, V_reshaped, mask=mask)
 
-	# Contcatenation over the heads
+	    # Contcatenation over the heads
         A_reshaped = einx.rearrange(
             "b h s dv -> b s (h dv)", 
             A_for_all_heads_needs_reshaping,
             )  # concatenate heads
         output = self.O(A_reshaped)  # shape (batch_size, seq_len, d_model)
     
-    # ) -> Float[Tensor, " ... queries d_v"]: 
-        # next step is apply our attenation mechanism per head
-
-        # then we concatenate the results (undo the reshaping)
-
-        # the masking stuff ... and rope ... are TBD
         return output
