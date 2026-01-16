@@ -251,6 +251,7 @@ def run_multihead_self_attention_with_rope(
         rope_params={
             "max_seq_len": max_seq_len,
             "theta": theta,
+            "token_positions": token_positions,
         },
         )
     mhsa.load_state_dict({

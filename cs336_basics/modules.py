@@ -726,7 +726,13 @@ class MultiheadedSelfAttention(torch.nn.Module):
                 max_seq_len=x.shape[1],
                 device=x.device
                 )
-            token_positions = torch.arange(x.shape[1], device=x.device)
+            if "token_positions" in self.rope_params:
+                token_positions = self.rope_params["token_positions"]
+            else:
+                token_positions = torch.arange(x.shape[1], device=x.device)
+            if token_positions is None:
+                token_positions = torch.arange(x.shape[1], device=x.device)
+                
             Q_reshaped = rope_operator.forward(Q_reshaped, token_positions)
             K_reshaped = rope_operator.forward(K_reshaped, token_positions)
              
