@@ -567,23 +567,12 @@ def scaled_dot_product_attention(
     logger.info(f"queries : {queries.shape}")
     logger.info(f"keys : {keys.shape}")
     logger.info(f"values : {values.shape}")
-    if mask is not None:
-        logger.info(f"mask : {mask.shape}")
-    else: 
-        logger.error("mask : None")
-        # num_heads = queries.shape[-3] if len(queries.shape) >=3 else 1
-        # logger.info("no mask provided")
-        # mask = torch.tril(torch.ones(queries.shape[-2], keys.shape[-2], dtype=torch.bool, device=queries.device))
-        # logger.info(f"generated causal mask of shape: {mask.shape}")
-        # mask = einx.rearrange(" q k -> 1 q k", mask)  # broadcast to match batch and head dims
-        # logger.info(f"generated causal mask of shape. after rearrange: {mask.shape}")
-        # mask = mask.repeat_interleave(num_heads, dim=0)  # repeat for each head
-        # for _ in range(len(queries.shape) - 3):
-        #     mask = mask.unsqueeze(0)  # add batch dims
-        #     print(mask.shape)
-        #     print(mask)
-        # logger.info(f"generated causal mask of shape. after repeat: {mask.shape}") 
-
+    
+    if mask is None:
+        logger.error("No mask provided")
+        # Consider making on the fly?        
+    logger.info(f"mask : {mask.shape}")
+        
 
     dk = keys.shape[-1]
     dv = values.shape[-1]
