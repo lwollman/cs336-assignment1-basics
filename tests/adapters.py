@@ -261,8 +261,7 @@ def run_multihead_self_attention_with_rope(
         "O.weights": o_proj_weight,
     })
     return mhsa.forward(in_features)
-    raise NotImplementedError
-
+    
 
 def run_rope(
     d_k: int,
@@ -365,7 +364,31 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    transformer_block = homework.TransformerBlock(
+        d_model=d_model,
+        num_heads=num_heads,
+        d_ff=d_ff,
+        rope_params={
+            "max_seq_len": max_seq_len,
+            "theta": theta,
+        },
+    )
+
+    transformer_block.load_state_dict({
+        "rms1.g": weights["ln1.weight"],
+        "rms2.g": weights["ln2.weight"],
+        "mhsa.Q.weights": weights["attn.q_proj.weight"],
+        "mhsa.K.weights": weights["attn.k_proj.weight"],
+        "mhsa.V.weights": weights["attn.v_proj.weight"],
+        "mhsa.O.weights": weights["attn.output_proj.weight"],
+        "ffn.W1.weights": weights["ffn.w1.weight"],
+        "ffn.W2.weights": weights["ffn.w2.weight"],
+        "ffn.W3.weights": weights["ffn.w3.weight"],
+    })
+    return transformer_block.forward(
+        x=in_features,
+    )
+
 
 
 def run_transformer_lm(

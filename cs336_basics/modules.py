@@ -239,7 +239,7 @@ class RMSLayerNormalization(torch.nn.Module):
 
         #norm_rms = a_float32 / rms_a. # has wrong dims because lost one in mean
         norm_rms_einx = a_float32 / rms_a_einx  # dims OK here becaue of kkeepdims
-        # return g * norm_rms_einx
+        
         weighted = self.g * norm_rms_einx
 
         return weighted.to(in_dtype)
@@ -278,7 +278,7 @@ class SwiGLUFFN(torch.nn.Module):
             Hidden dimension of the model.
             i.e. the dimension of the vector space into which the tokens are embedded.
         d_ff: int
-            This is a scaled version of hte d_model, approximately equal to
+            This is a scaled version of the d_model, approximately equal to
             8./3 * d_model.  Note that other implemenations may benefit form using 
             dimensional_expansion_factor
         device : torch.device or None, optional
@@ -580,6 +580,7 @@ def scaled_dot_product_attention(
     logger.info(f"d_k: {dk}")
     logger.info(f"d_v: {dv}")
     qk = einx.dot("... q dk, ... k dk -> ... q k", queries, keys)
+    logger.info(f"qk shape (pre-normalization): {qk.shape}")
     qk = qk / math.sqrt(dk)  # normalize by sqrt d_k
 
     # float_mask = mask.to(dtype=torch.float32)
@@ -757,3 +758,101 @@ class MultiheadedSelfAttention(torch.nn.Module):
         output = self.O(A_reshaped)  # shape (batch_size, seq_len, d_model)
     
         return output
+
+
+class TransformerBlock(torch.nn.Module):
+    """
+    Implement the pre-norm Transformer block as described in §3.5 and illustrated in Figure 2. 
+    You Transformer block should accept (at least) the following parameters.
+
+    d_model: int Dimensionality of the Transformer block inputs.
+    num_heads: int Number of heads to use in multi-head self-attention.
+    d_ff: int Dimensionality of the position-wise feed-forward inner layer.
+
+    To test your implementation, implement the adapter [adapters.run_transformer_block]. Then
+    run uv run pytest -k test_transformer_block to test your implementation.
+    Deliverable: Transformer block code that passes the provided test 
+
+    ...
+    Aside, within MHSA, the Q,K is about mapping the input token to its meaning ... 
+    e.g. "cat": (an animal, a piece of earth moving equipment ... etc) 
+    The V (QK) is about adding context  ... it is moving, what color is it, etc.
+    villian has a q ... 
+
+    """
+    def __init__(
+            self,
+            d_model: int,
+            num_heads: int,
+            d_ff: int,
+            rope_params: Optional[dict] = None,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+            ):          
+        """
+        Constructor.
+
+        Parameters
+        ----------
+        d_model : int
+            Hidden dimension of the model.
+            i.e. the dimension of the vector space into which the tokens are embedded.
+        num_heads : int
+            Number of attention heads.
+        d_ff : int
+            Dimensionality of the position-wise feed-forward inner layer.
+        """
+        super().__init__()
+        self.rope_params = rope_params
+        self.mhsa = MultiheadedSelfAttention(
+            d_model=d_model,
+            num_heads=num_heads,
+            rope_params=rope_params,
+            device=device,
+            dtype=dtype
+            )
+        self.rms1 = RMSLayerNormalization(
+            d_model=d_model,
+            device=device,
+            dtype=dtype
+            )
+        self.ffn = SwiGLUFFN(
+            d_model=d_model,
+            d_ff=d_ff,
+            device=device,
+            dtype=dtype
+            )
+        self.rms2 = RMSLayerNormalization(
+            d_model=d_model,
+            device=device,
+            dtype=dtype
+            )
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the Transformer block.
+
+        Parameters
+        ----------
+        x: torch.Tensor
+            Input tensor of shape (batch_size, seq_len, d_model).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (batch_size, seq_len, d_model).
+        """
+        # Multi-headed self-attention with residual connection
+        x_rhs = self.rms1(x) 
+        x_rhs = self.mhsa(x_rhs)
+        x_after_1st_add = x + x_rhs
+
+        # Position-wise feed-forward network with residual connection
+        x = x_after_1st_add
+        x_rhs = self.rms2(x)
+        x_rhs = self.ffn(x_rhs)
+
+        output = x_after_1st_add + x_rhs  
+        
+        return output
+
