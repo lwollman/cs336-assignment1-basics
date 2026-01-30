@@ -470,8 +470,46 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    rope_params = {
+        "max_seq_len": context_length,
+        "theta": rope_theta,
+        "token_positions": None,
+    }
+    transformer_language_model = homework.TransformerLanguageModel( 
+        vocab_size=vocab_size,
+        d_model=d_model,
+        num_heads=num_heads,
+        d_ff=d_ff,
+        num_layers=num_layers,
+        max_seq_len=context_length,
+        rope_params=rope_params,
+    )
+    
+    # Build the state dict mapping from the weights dictionary
+    state_dict = {
+        "embedding.embedding_matrix": weights["token_embeddings.weight"],
+        "norm.g": weights["ln_final.weight"],
+        "output_projection.weights": weights["lm_head.weight"],
+    }
+    
+    # for k in weights.keys(): print(f"{k}: {weights[k].shape}")
 
+    # Map each transformer block's weights
+    for i in range(num_layers):
+        state_dict[f"transformer_blocks.{i}.mhsa.Q.weights"] = weights[f"layers.{i}.attn.q_proj.weight"]
+        state_dict[f"transformer_blocks.{i}.mhsa.K.weights"] = weights[f"layers.{i}.attn.k_proj.weight"]
+        state_dict[f"transformer_blocks.{i}.mhsa.V.weights"] = weights[f"layers.{i}.attn.v_proj.weight"]
+        state_dict[f"transformer_blocks.{i}.mhsa.O.weights"] = weights[f"layers.{i}.attn.output_proj.weight"]
+        state_dict[f"transformer_blocks.{i}.rms1.g"] = weights[f"layers.{i}.ln1.weight"]
+        state_dict[f"transformer_blocks.{i}.rms2.g"] = weights[f"layers.{i}.ln2.weight"]
+        state_dict[f"transformer_blocks.{i}.ffn.W1.weights"] = weights[f"layers.{i}.ffn.w1.weight"]
+        state_dict[f"transformer_blocks.{i}.ffn.W2.weights"] = weights[f"layers.{i}.ffn.w2.weight"]
+        state_dict[f"transformer_blocks.{i}.ffn.W3.weights"] = weights[f"layers.{i}.ffn.w3.weight"]
+    
+    transformer_language_model.load_state_dict(state_dict)
+
+    return transformer_language_model.forward(in_indices)
+    
 
 def run_rmsnorm(
     d_model: int,
@@ -717,3 +755,52 @@ def run_train_bpe(
         special_tokens=special_tokens,
         )
     #raise NotImplementedError
+
+
+
+# def translate_state_dict(state_dict):
+#     """
+#     Ron's function for mapong the Docstring for translate_state_dict
+    
+#     :param state_dict: Description
+#     """
+#     new_state = OrderedDict()
+#     for k, v in state_dict.items():
+#         # Embeddings
+#         if k == "token_embeddings.weight":
+#             new_state["embedding_matrix.weights"] = v
+
+#         # Attention projections
+#         elif m := re.match(r"layers\.(\d+)\.attn\.q_proj\.weight", k):
+#             new_state[f"xform.{m[1]}.cmsawr.q_proj.weights"] = v
+#         elif m := re.match(r"layers\.(\d+)\.attn\.k_proj\.weight", k):
+#             new_state[f"xform.{m[1]}.cmsawr.k_proj.weights"] = v
+#         elif m := re.match(r"layers\.(\d+)\.attn\.v_proj\.weight", k):
+#             new_state[f"xform.{m[1]}.cmsawr.v_proj.weights"] = v
+#         elif m := re.match(r"layers\.(\d+)\.attn\.output_proj\.weight", k):
+#             new_state[f"xform.{m[1]}.cmsawr.o_proj.weights"] = v
+
+#         # FFN
+#         elif m := re.match(r"layers\.(\d+)\.ffn\.w1\.weight", k):
+#             new_state[f"xform.{m[1]}.ffn.w1.weights"] = v
+#         elif m := re.match(r"layers\.(\d+)\.ffn\.w2\.weight", k):
+#             new_state[f"xform.{m[1]}.ffn.w2.weights"] = v
+#         elif m := re.match(r"layers\.(\d+)\.ffn\.w3\.weight", k):
+#             new_state[f"xform.{m[1]}.ffn.w3.weights"] = v
+
+#         # Norms
+#         elif m := re.match(r"layers\.(\d+)\.ln1\.weight", k):
+#             new_state[f"xform.{m[1]}.ln1.g"] = v
+#         elif m := re.match(r"layers\.(\d+)\.ln2\.weight", k):
+#             new_state[f"xform.{m[1]}.ln2.g"] = v
+#         elif k == "ln_final.weight":
+#             new_state["norm.g"] = v
+
+#         # LM head
+#         elif k == "lm_head.weight":
+#             new_state["head.weights"] = v
+
+#         else:
+#             print("⚠️ Unmapped key:", k)
+
+#     return new_state

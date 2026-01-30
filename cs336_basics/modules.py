@@ -639,6 +639,13 @@ class MultiheadedSelfAttention(torch.nn.Module):
             i.e. the dimension of the vector space into which the tokens are embedded.
         num_heads : int
             Number of attention heads.
+        rope_params : Optional[dict]
+            Parameters for RoPE positional embedding.
+            rope_params={
+            "max_seq_len": max_seq_len,
+            "theta": theta,
+            "token_positions": token_positions,
+            },
         q_proj_weight : Float[Tensor, " d_model d_k * num_heads"]
             Query projection weights.
         k_proj_weight : Float[Tensor, " d_model d_k * num_heads"]
@@ -856,3 +863,102 @@ class TransformerBlock(torch.nn.Module):
         
         return output
 
+
+class TransformerLanguageModel(torch.nn.Module):
+    """
+    Deliverable: Implement the Transformer language model as a torch.nn.Module.
+
+    To test your implementation, implement the test adapter at [adapters.run_transformer_lm]. Then, run 
+    uv run pytest -k test_transformer_lm.
+    """
+    def __init__(
+            self,
+            vocab_size: int,
+            d_model: int,
+            num_heads: int,
+            d_ff: int,
+            num_layers: int,
+            max_seq_len: int,
+            rope_params: Optional[dict] = None,
+            device: Optional[torch.device] = None,
+            dtype: Optional[torch.dtype] = None,
+            ):          
+        """
+        Constructor.
+
+        Parameters
+        ----------
+        vocab_size : int
+            Size of the vocabulary.
+        d_model : int
+            Hidden dimension of the model.
+            i.e. the dimension of the vector space into which the tokens are embedded.
+        num_heads : int
+            Number of attention heads.
+        d_ff : int
+            Dimensionality of the position-wise feed-forward inner layer.
+        num_layers : int
+            Number of Transformer blocks.
+        max_seq_len : int
+            Maximum sequence length.
+        """
+        super().__init__()
+        self.embedding = Embedding(
+            num_embeddings=vocab_size,
+            embedding_dim=d_model,
+            device=device,
+            dtype=dtype
+            )
+        
+        self.transformer_blocks = torch.nn.ModuleList(
+            [
+                TransformerBlock(
+                    d_model=d_model,
+                    num_heads=num_heads,
+                    d_ff=d_ff,
+                    rope_params=rope_params,
+                    device=device,
+                    dtype=dtype
+                ) for _ in range(num_layers)
+            ]
+        )
+
+        self.norm = RMSLayerNormalization(
+            d_model=d_model,
+            device=device,
+            dtype=dtype
+            )
+        
+        self.output_projection = Linear(
+            in_features=d_model,
+            out_features=vocab_size,
+            device=device,
+            dtype=dtype
+            )
+        
+        return
+    
+    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the Transformer language model.
+
+        Parameters
+        ----------
+        token_ids: torch.Tensor
+            Input tensor of shape (batch_size, seq_len).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (batch_size, seq_len, vocab_size).
+        """
+        x = self.embedding(token_ids)  # shape (batch_size, seq_len, d_model)
+        
+        for block in self.transformer_blocks:
+            x = block(x)  # shape (batch_size, seq_len, d_model)
+        
+        x = self.norm(x)  # shape (batch_size, seq_len, d_model)
+        
+        logits = self.output_projection(x)  # shape (batch_size, seq_len, vocab_size)
+        
+        return logits
