@@ -485,6 +485,8 @@ def run_transformer_lm(
         rope_params=rope_params,
     )
     
+    for k in weights.keys(): print(f"{k}: {weights[k].shape}")
+
     # Build the state dict mapping from the weights dictionary
     state_dict = {
         "embedding.embedding_matrix": weights["token_embeddings.weight"],
@@ -492,8 +494,6 @@ def run_transformer_lm(
         "output_projection.weights": weights["lm_head.weight"],
     }
     
-    # for k in weights.keys(): print(f"{k}: {weights[k].shape}")
-
     # Map each transformer block's weights
     for i in range(num_layers):
         state_dict[f"transformer_blocks.{i}.mhsa.Q.weights"] = weights[f"layers.{i}.attn.q_proj.weight"]
@@ -506,8 +506,13 @@ def run_transformer_lm(
         state_dict[f"transformer_blocks.{i}.ffn.W2.weights"] = weights[f"layers.{i}.ffn.w2.weight"]
         state_dict[f"transformer_blocks.{i}.ffn.W3.weights"] = weights[f"layers.{i}.ffn.w3.weight"]
     
+    # give this specific model instance values for _its_ state dict
+    # .. maybe think of this as "populate state dict instance".
+    print(transformer_language_model)
+    
     transformer_language_model.load_state_dict(state_dict)
-
+    print(transformer_language_model)
+    # breakpoint
     return transformer_language_model.forward(in_indices)
     
 
