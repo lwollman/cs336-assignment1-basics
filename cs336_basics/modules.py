@@ -216,6 +216,9 @@ class RMSLayerNormalization(torch.nn.Module):
 
         Normalize the input tensor by the scalar RMS(a) -- see Equation (4) in the notes.
         """
+        DEBUG = True
+        if DEBUG:
+            logger.debug(f" Norm {self} forward called with input of shape {a.shape}")
         # Upcast to float32
         in_dtype = a.dtype
         a_float32 = a.to(torch.float32)
@@ -223,6 +226,7 @@ class RMSLayerNormalization(torch.nn.Module):
         # Use einx
         a_squared_einx = einx.dot("..., ... -> ...", a_float32, a_float32)
         a_squared = a_float32 ** 2. # x.pow. 
+        # this uses 2*np.prod(a_float32.shape) FLOPS
 
         # use a space to separate dimensions in the einx input string.
         # here we are saying use the last dimension.
@@ -234,13 +238,17 @@ class RMSLayerNormalization(torch.nn.Module):
             ) + self.eps
         rms_a_einx = ms_a_einx.pow(0.5)        
 
-        ms_a = a_squared.mean(axis=-1) + self.eps  #
-        rms_a = ms_a.pow(0.5)
+        ms_a = a_squared.mean(axis=-1) + self.eps  # + d_model FLOPS to take the mean, +1 for the addition of eps
+        # rms_a = ms_a.pow(0.5)
 
         #norm_rms = a_float32 / rms_a. # has wrong dims because lost one in mean
         norm_rms_einx = a_float32 / rms_a_einx  # dims OK here becaue of kkeepdims
         
         weighted = self.g * norm_rms_einx
+        if DEBUG:
+            logger.debug(f" weighted final output of shape {weighted.shape}")
+            # logger.debug(f" weighted final output {weighted} output of shape {weighted.shape}")
+        
 
         return weighted.to(in_dtype)
 
@@ -314,7 +322,7 @@ class SwiGLUFFN(torch.nn.Module):
 
         w1x = self.W1.forward(x) # Note this is the same as below: 
         # w1x = self.W1(x)
-        w3x = self.W3.forward(x) # Note this is the same as below: 
+        w3x = self.W3.forward(x)
         
         silu = w1x * torch.sigmoid(w1x)
 
@@ -502,10 +510,16 @@ def softmax(
         Apply the softmax operation to the input tensor along the last dimension.
 
         """
+        DEBUG = False
         x = in_features
-        print("softmax input shape:", x.shape)
+        if DEBUG:
+            logger.debug(f"\n softmax input shape: \n {x.shape}")
+            logger.debug(f"\n softmax input: \n {x}")
+            logger.debug(f"\n softmax dim: {dim}")
         maxx, _ = torch.max(x, dim=dim, keepdim=True)
-        print("max values shape:", maxx.shape)
+        if DEBUG:
+            logger.debug(f"\n max values shape: {maxx.shape}")
+            logger.debug(f"\n max values: \n {maxx}")
         shifted_x = x - maxx  # now won't blow up from large exponents
 
         exp_x = torch.exp(shifted_x)
@@ -519,6 +533,7 @@ def softmax(
         # sum_exp = torch.sum(x_exp, dim=-1, keepdim=True)
         # softmax_result = x_exp / sum_exp
         return result
+
 
 def scaled_dot_product_attention(
     queries: Float[Tensor, " ... n d_k"],
@@ -579,14 +594,14 @@ def scaled_dot_product_attention(
     
     logger.info(f"d_k: {dk}")
     logger.info(f"d_v: {dv}")
-    qk = einx.dot("... q dk, ... k dk -> ... q k", queries, keys)
+    qk = einx.dot("... q dk, ... k dk -> ... q k", queries, keys) # 2bsd FLOPS
     logger.info(f"qk shape (pre-normalization): {qk.shape}")
-    qk = qk / math.sqrt(dk)  # normalize by sqrt d_k
+    qk = qk / math.sqrt(dk)  # normalize by sqrt d_k (# bs FLOPS)
 
     # float_mask = mask.to(dtype=torch.float32)
 
     # apply the mask if given:
-    min_qk_elt = torch.min(qk) + float("-inf") #
+    min_qk_elt = torch.min(qk) + float("-inf") # (bs FLOPS)
         
     # do masking
     masked_qk = qk.clone()
@@ -601,6 +616,7 @@ def scaled_dot_product_attention(
     A = einx.dot("... n m, ... m dv -> ... n dv", softmaxed_masked_qk, values)
     
     return A
+
 
 class MultiheadedSelfAttention(torch.nn.Module):
     """
@@ -714,13 +730,14 @@ class MultiheadedSelfAttention(torch.nn.Module):
         Q = self.Q(x)  # shape (batch_size, seq_len, d_model)
         K = self.K(x)  # shape (batch_size, seq_len, d_model)
         V = self.V(x)  # shape (batch_size, seq_len, d_model
-        logger.info(f"Shape check: {__class__.__name__}")
-        logger.info(f"queries : {Q.shape}")
-        logger.info(f"keys : {K.shape}")
-        logger.info(f"values : {V.shape}")
-        logger.info(f"d_k: {d_k}")
-        logger.info(f"d_v: {d_v}")
-
+        DEBUG = True
+        if DEBUG:
+            logger.debug(f"Shape check: {__class__.__name__}")
+            logger.debug(f"queries : {Q.shape}")
+            logger.debug(f"keys : {K.shape}")
+            logger.debug(f"values : {V.shape}")
+            logger.debug(f"d_k: {d_k}")
+            logger.debug(f"d_v: {d_v}")
         # reshape Q, K, V to (batch_size, num_heads, seq_len, d_k)
         Q_reshaped = einx.rearrange("b s (h dk) -> b h s dk", Q, h=self.num_heads)  # ummm b h s dk or b s h dk?
         K_reshaped = einx.rearrange("b s (h dk) -> b h s dk", K, h=self.num_heads)
@@ -962,3 +979,71 @@ class TransformerLanguageModel(torch.nn.Module):
         logits = self.output_projection(x)  # shape (batch_size, seq_len, vocab_size)
         
         return logits
+
+
+def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """
+
+    Parameters    
+    ----------
+    o_i: torch.Tensor
+        Predicted Logits tensor of shape (batch_size, seq_len, vocab_size).
+        This is the output of the transformer language model for a batch of sequences.
+        It 
+    targets: torch.Tensor
+        Target tensor of shape (batch_size, seq_len).
+    Recall that the transformer model defines a distribution p_theta(X_{i+1}, x_{1:i})
+    for each sequence of x of length m+1 and i=1..m. Given a training set D consisting of 
+    sequences of lengh m we define the standard cross-entropy (negative log-likelyhood) loss function:
+
+    l(theta, D) = (1 / m|D|) Sum over x in D Sum over i=1..m -log(p_theta(X_{i+1} | x_{1:i}))
+
+    Note that a single forward pass of the transformer language model will give us the p_theta(X_{i+1} | x_{1:i}) for all i=1..m, 
+    so we can compute this loss with a single forward pass.
+
+    In particular, the Transformer computes logits o_i in R^{vocab_size} for each position i, 
+    and then applies a softmax to get the distribution 
+    p_theta(X_{i+1} | x_{1:i}) = softmax(o_i)[x_{i+1}] = exp(o_i[x_{i+1}]) / sum_a exp(o_i[a]) with _a_ running over the vocabulary.
+
+    The cross-entropy loss is generally defined with respect to the vector of logits o_i in R^{vocab_size} and the target (true next token) x_{i+1}.
+    Implementing the cross-entropy loss function requires some care with numerical issues, just like the softmax function does.
+
+    The cross-entropy loss is basically saying "how surprised was the model to see the actual next token x_{i+1} given the previous tokens x_{1:i}?"
+
+    - recall p(x) is non-negative and sums to 1, so -log(p(x)) is non-negative and is zero 
+    when p(x) = 1 (perfect prediction).
+    - log(p(x)) will be negative when p(x) is between 0 and 1, and will approach negative infinity as p(x) approaches zero (very bad prediction).
+    - it will be a bit hyperbolic-down looking at it, but when we take the negative, it will look like a hyperbolic-up curve that approaches zero as p(x) approaches 1
+    , and grows larger as p(x) approaches zero.
+    - The loss is basically saying "for each token in the sequence, how surprised was the model to see that token given the previous tokens?"
+
+    Deliverable: Write a function to compute the cross-entropy loss given the predicted logits o_i and targets x_{i+1} and compute the 
+    cross-entropy l = -log(softmax(o_i)[x_{i+1}]) in a numerically stable way.
+
+    Your function should handle the following:
+    - Subtract the largets element for numerical stability 
+    - Cancel out log and exp whenever possible.
+    - handle any additional batch dimensions and return the _average across the batch_ (i.e. return a scalar loss value, not a vector of losses for each example in the batch).
+    As with Section 3.3 we assume batch-like dimensions are leading dimensions, and the final two dimensions of the logits are (seq_len, vocab_size) 
+    and the final dimension of the targets is (seq_len).    
+
+    uv run pytest -s -v -k test_cross_entropy
+    """
+    # TODO CHeck this AI generated code for correctness, and make sure it is consistent with the shapes of the inputs and outputs as described in the docstring.
+    # Subtract the maximum logit for numerical stability
+    logger.info(f"cross_entropy: o_i shape: {o_i.shape}, targets shape: {targets.shape}")
+    max_logit = torch.max(o_i, dim=-1, keepdim=True).values
+    shifted_logits = o_i - max_logit  # shape (..., seq_len, vocab_size)
+
+    # Compute the log-sum-exp for the denominator of the softmax
+    log_sum_exp = torch.log(torch.sum(torch.exp(shifted_logits), dim=-1))  # shape (..., seq_len)
+
+    # Compute the log probability of the target token
+    target_log_prob = shifted_logits.gather(dim=-1, index=targets.unsqueeze(-1)).squeeze(-1)  # shape (..., seq_len)
+
+    # Compute the cross-entropy loss
+    loss = log_sum_exp - target_log_prob  # shape (..., seq_len)
+
+    # Average over batch and sequence dimensions
+    return loss.mean()
+
