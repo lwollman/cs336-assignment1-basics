@@ -1032,6 +1032,7 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     # TODO CHeck this AI generated code for correctness, and make sure it is consistent with the shapes of the inputs and outputs as described in the docstring.
     # Subtract the maximum logit for numerical stability
     logger.info(f"cross_entropy: o_i shape: {o_i.shape}, targets shape: {targets.shape}")
+    logger.info(f"cross_entropy: o_i: \n {o_i}, targets: \n {targets}")
     max_logit = torch.max(o_i, dim=-1, keepdim=True).values
     shifted_logits = o_i - max_logit  # shape (..., seq_len, vocab_size)
 
