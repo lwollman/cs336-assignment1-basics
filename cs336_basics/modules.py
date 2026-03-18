@@ -983,7 +983,7 @@ class TransformerLanguageModel(torch.nn.Module):
 
 def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     """
-
+    CAUTION: 
     Parameters    
     ----------
     o_i: torch.Tensor
@@ -1030,21 +1030,139 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     uv run pytest -s -v -k test_cross_entropy
     """
     # TODO CHeck this AI generated code for correctness, and make sure it is consistent with the shapes of the inputs and outputs as described in the docstring.
-    # Subtract the maximum logit for numerical stability
+    # Subtract the maximum logit for numerical stability (this ensures that the maximum number
+    # in the array being exponentiated is zero, so it cannot blow up from large exponents.
+    logger.info("INPUTS:\n")
     logger.info(f"cross_entropy: o_i shape: {o_i.shape}, targets shape: {targets.shape}")
-    logger.info(f"cross_entropy: o_i: \n {o_i}, targets: \n {targets}")
+    logger.info(f"\n")
+    logger.info(f"cross_entropy: o_i: \n {o_i}, \n targets: \n {targets}")
     max_logit = torch.max(o_i, dim=-1, keepdim=True).values
+    logger.info(f"cross_entropy: max_logit shape: {max_logit.shape}, max_logit: \n {max_logit}")
     shifted_logits = o_i - max_logit  # shape (..., seq_len, vocab_size)
+    logger.info(f"cross_entropy: shifted_logits shape: {shifted_logits.shape}, shifted_logits: \n {shifted_logits}")
 
     # Compute the log-sum-exp for the denominator of the softmax
     log_sum_exp = torch.log(torch.sum(torch.exp(shifted_logits), dim=-1))  # shape (..., seq_len)
+    logger.info(f"cross_entropy: log_sum_exp shape: {log_sum_exp.shape}, log_sum_exp: \n {log_sum_exp}")
 
     # Compute the log probability of the target token
     target_log_prob = shifted_logits.gather(dim=-1, index=targets.unsqueeze(-1)).squeeze(-1)  # shape (..., seq_len)
-
+    logger.info(f"cross_entropy: target_log_prob shape: {target_log_prob.shape}, target_log_prob: \n {target_log_prob}")
     # Compute the cross-entropy loss
     loss = log_sum_exp - target_log_prob  # shape (..., seq_len)
-
+    logger.info(f"cross_entropy: loss shape: {loss.shape}, loss: \n {loss}")
+    logger.info(f"cross_entropy: loss (before mean): \n {loss}")
     # Average over batch and sequence dimensions
     return loss.mean()
 
+
+class AdamW(torch.optim.Optimizer):
+    """
+
+    Deliverable: Implement the AdamW optimizer as a subclass of torch.optim.Optimizer. Your
+    class should take the learning rate α in __init__, as well as the β, ε and λ hyperparameters. To help
+    you keep state, the base Optimizer class gives you a dictionary self.state, which maps nn.Parameter
+    objects to a dictionary that stores any information you need for that parameter (for AdamW, this would
+    be the moment estimates). Implement [adapters.get_adamw_cls] and make sure it passes uv run
+    pytest -k test_adamw .
+
+    """
+    def __init__(
+            self, 
+            params, 
+            lr=1e-3, 
+            betas=(0.9, 0.999), 
+            eps=1e-8, 
+            weight_decay=0.01
+            ):
+        """ 
+        Constructor for AdamW optimizer.
+        Parameters
+        ----------
+        params: iterable of nn.Parameter
+            The parameters to optimize.
+        lr: float
+            Learning rate.
+        betas: Tuple[float, float]
+            Coefficients used for computing running averages of gradient and its square.
+        eps: float
+            Term added to the denominator to improve numerical stability.
+        weight_decay: float
+            Weight decay.
+        """
+        defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
+        super().__init__(params, defaults)
+
+    def step(self, closure=None):
+        """ 
+            This is what gets "looped over t = 1..T" in the AdamW algorithm.
+
+            Note how passing teh betas (for example) into the detaults dict in the init allows us to access them here via group["betas"] for each param group.
+            **this is really cool and powerful!**
+            
+        """
+
+        
+        loss = None if closure is None else closure()
+        
+        for group in self.param_groups:
+            lr = group["lr"] # Get the learning rate.
+            # alpha = group["lr"] 
+            betas = group["betas"] # Get the beta coefficients. # This is a tuple (beta1, beta2)
+            lamda = group["weight_decay"] # Get the weight decay coefficient.
+            epsilon = group["eps"] # Get the epsilon for numerical stability.
+            beta1 = betas[0]
+            beta2 = betas[1]
+
+            for p in group["params"]:
+                # init(θ) (Initialize learnable parameters) -- this p basicall, p refers to subspace of theta-land
+                if p.grad is None:
+                    continue
+
+                state = self.state[p] # Get state associated with p.
+                t = state.get("t", 1) # Get iteration number from the state, or initial value.
+                
+                # m ←0 (Initial value of the first moment vector; same shape as θ)
+                m = state.get("m", torch.zeros_like(p.data)) # Get first moment vector from the state, or initial value.
+                
+                # v ←0 (Initial value of the second moment vector; same shape as θ)
+                v = state.get("v", torch.zeros_like(p.data)) # Get second moment vector from the state, or initial value.
+                
+                # g ←∇θℓ(θ; Bt) (Compute the gradient of the loss at the current time step)
+                grad = p.grad.data # Get the gradient of loss with respect to p.                
+
+                # m ←β1m + (1 −β1)g (Update the first moment estimate)
+                m = beta1 * m + (1 - beta1) * grad # Update the first moment vector.
+
+                # # v ←β2v + (1 −β2)g2 (Update the second moment estimate)
+                v = beta2 * v + (1 - beta2) * grad**2. # Update the first moment vector.
+
+                # α_t ←[α√1−(β2)t] / [1−(β1)t ]
+                numerator = lr * math.sqrt(1 - beta2**t)
+                denominator = 1 - beta1**t
+                alpha_t = numerator / denominator
+            
+                # θ ←θ −αt m√v+ε (Update the parameters)
+                p.data -= alpha_t * m / (torch.sqrt(v) + epsilon)
+                
+                # θ ←θ −αλθ (Apply weight decay)
+                p.data -= lr * lamda * p.data 
+                
+                state["t"] = t + 1 # Increment iteration number.
+                state["m"] = m # Update first moment vector in state.
+                state["v"] = v # Update second moment vector in state.
+                # state["lr"] = lr # Update learning rate in state (optional, for logging or debugging).
+        
+        return loss
+
+# Problem (adamwAccounting): Resource accounting for training with AdamW (2 points)
+# Let us compute how much memory and compute running AdamW requires. Assume we are using
+# float32 for every tensor.
+# (a) How much peak memory does running AdamW require? Decompose your answer based on the
+# memory usage of the parameters, activations, gradients, and optimizer state. Express your answer
+# in terms of the batch_size and the model hyperparameters (vocab_size, context_length,
+# num_layers, d_model, num_heads). Assume d_ff = 4 ×d_model.
+# For simplicity, when calculating memory usage of activations, consider only the following compo-
+# nents:
+# • Transformer block
+# – RMSNorm(s)

@@ -25,6 +25,11 @@ def test_softmax_matches_pytorch():
 
 
 def test_cross_entropy():
+    """ 
+    The inputs variable below can be thought of the as the logits output by a transformer model for a batch of sequences, 
+    There are in this case 5 elements in the vocabulary. 
+    Each row is the logits for each vocab element
+    """
     inputs = torch.tensor(
         [
             [
