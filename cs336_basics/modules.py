@@ -1082,7 +1082,7 @@ class AdamW(torch.optim.Optimizer):
         params: iterable of nn.Parameter
             The parameters to optimize.
         lr: float
-            Learning rate.
+            Learning rate. (this is the alpha in the AdamW algorithm)
         betas: Tuple[float, float]
             Coefficients used for computing running averages of gradient and its square.
         eps: float
@@ -1133,6 +1133,9 @@ class AdamW(torch.optim.Optimizer):
 
                 # m ←β1m + (1 −β1)g (Update the first moment estimate)
                 m = beta1 * m + (1 - beta1) * grad # Update the first moment vector.
+                # ... perhaps think of this as "momentum", its large when the gradients are 
+                # large, and small when the gradients are small, and it is a running average 
+                # of the gradients over time.
 
                 # # v ←β2v + (1 −β2)g2 (Update the second moment estimate)
                 v = beta2 * v + (1 - beta2) * grad**2. # Update the first moment vector.

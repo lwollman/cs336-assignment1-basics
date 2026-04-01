@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from typing import IO, Any, BinaryIO
 from collections.abc import Iterable
@@ -664,8 +665,14 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
-
+    if it < warmup_iters:
+        return max_learning_rate * it / warmup_iters
+    elif it >= cosine_cycle_iters:
+        return min_learning_rate
+    else:
+        it_cosine = (it - warmup_iters) % (cosine_cycle_iters - warmup_iters)
+        cosine_decay = 0.5 * (1 + math.cos(math.pi * it_cosine / (cosine_cycle_iters - warmup_iters)))
+        return min_learning_rate + (max_learning_rate - min_learning_rate) * cosine_decay
 
 def run_save_checkpoint(
     model: torch.nn.Module,
