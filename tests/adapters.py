@@ -628,9 +628,26 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
         max_l2_norm (float): a positive value containing the maximum l2-norm.
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
-    """
-    raise NotImplementedError
+    
+    Write a function that implements gradient clipping. Your function should take a list of parameters
+    and a maximum ℓ2-norm. It should modify each parameter gradient in place. Use ε = 10−6 (the
+    PyTorch default). Then, implement the adapter [adapters.run_gradient_clipping] and make sure
+    it passes uv run pytest -k test_gradient_clipping.
+    34
 
+    """
+    grads = [p.grad for p in parameters if p.grad is not None]
+    if not grads:
+        return
+    g = torch.cat([g.view(-1) for g in grads])
+    g_norm = torch.norm(g, p=2)
+    clip_coef = max_l2_norm / (g_norm + 1e-6)
+    if clip_coef < 1:
+        for p in parameters:
+            if p.grad is not None:
+                p.grad.data.mul_(clip_coef)
+    # After this function runs, the combined gradients of the parameters should have l2 norm at most max_l2_norm.
+    
 
 def get_adamw_cls() -> Any:
     """
