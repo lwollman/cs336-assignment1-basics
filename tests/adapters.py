@@ -645,7 +645,7 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
     if clip_coef < 1:
         for p in parameters:
             if p.grad is not None:
-                p.grad.data.mul_(clip_coef)
+                p.grad.data *= clip_coef  # consider .mul_() for in-place multiplication
     # After this function runs, the combined gradients of the parameters should have l2 norm at most max_l2_norm.
     
 
