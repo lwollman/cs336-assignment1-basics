@@ -6,11 +6,12 @@
 from jaxtyping import Float
 from loguru import logger
 from torch import Tensor
-from typing import Optional
+from typing import Optional, Tuple
 
 import einx
 import math
 import numpy as np
+import numpy.typing as npt
 import torch
 
 
@@ -1169,3 +1170,38 @@ class AdamW(torch.optim.Optimizer):
 # nents:
 # • Transformer block
 # – RMSNorm(s)
+
+def get_batch(
+        x: npt.NDArray[np.int32], 
+        batch_size: int, 
+        context_length: int, 
+        device: str
+        ) -> Tuple[torch.Tensor, torch.Tensor]:
+    """ 
+    Parameters
+    ----------
+    x: npt.NDArray[np.int32]
+        Integer array with token IDs.
+    batch_size: int
+        Number of sequences to sample in the batch.
+    context_length: int
+        Length of the input sequences (number of tokens in the context).
+    device: str
+        PyTorch device string (e.g., 'cpu' or 'cuda:0').
+    
+    Deliverable: Write a function that takes a numpy array x (integer array with token IDs), a
+    batch_size, a context_length and a PyTorch device string (e.g., 'cpu' or 'cuda:0'), and returns
+    a pair of tensors: the sampled input sequences and the corresponding next-token targets. Both ten-
+    sors should have shape (batch_size, context_length) containing token IDs, and both should be
+    placed on the requested device. To test your implementation against our provided tests, you will first
+    need to implement the test adapter at [adapters.run_get_batch]. Then, run uv run pytest -k
+    test_get_batch to test your implementation
+    """
+
+    logger.info(f"get_batch: x shape: {x.shape}, batch_size: {batch_size}, context_length: {context_length}, device: {device}")
+    start_indices = np.random.randint(0, len(x) - context_length, size=batch_size)
+    end_indices = start_indices + context_length
+    sampled_inputs = torch.tensor([x[start:end] for start, end in zip(start_indices, end_indices)], dtype=torch.int32, device=device)
+    next_token_targets = torch.tensor([x[start+1:end+1] for start, end in zip(start_indices, end_indices)], dtype=torch.int32, device=device)
+    
+    return sampled_inputs, next_token_targets
