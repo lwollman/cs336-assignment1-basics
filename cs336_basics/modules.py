@@ -3,11 +3,13 @@
 
 """
 
+import os
+
 from jaxtyping import Float
 from loguru import logger
 from torch import Tensor
-from typing import Optional, Tuple
-
+from typing import Optional, Tuple, BinaryIO, IO
+import typing
 import einx
 import math
 import numpy as np
@@ -1205,3 +1207,60 @@ def get_batch(
     next_token_targets = torch.tensor([x[start+1:end+1] for start, end in zip(start_indices, end_indices)], dtype=torch.int32, device=device)
     
     return sampled_inputs, next_token_targets
+
+
+def save_checkpoint(
+        model: torch.nn.Module, 
+        optimizer: torch.optim.Optimizer, 
+        iteration: int, 
+        out: str | os.PathLike | BinaryIO | IO[bytes]
+        ) -> None:
+    """
+    Save the state of the model, optimizer, and iteration number to a checkpoint file.
+
+    Parameters
+    ----------
+    model: torch.nn.Module
+        The model to save.
+    optimizer: torch.optim.Optimizer
+        The optimizer to save.
+    iteration: int
+        The current iteration number.
+    out: str | os.PathLike | BinaryIO | IO[bytes]
+        The file path or file-like object to save the checkpoint to.
+    """
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "iteration": iteration
+    }
+    torch.save(checkpoint, out)
+
+
+def load_checkpoint(
+        src: str | os.PathLike | BinaryIO | IO[bytes],
+        model: torch.nn.Module, 
+        optimizer: torch.optim.Optimizer, 
+        ) -> int:
+    """
+    Load the state of the model, optimizer, and iteration number from a checkpoint file.
+
+    Parameters
+    ----------
+    src: str | os.PathLike | BinaryIO | IO[bytes]
+        The file path or file-like object to load the checkpoint from.
+    model: torch.nn.Module
+        The model to load the state into.
+    optimizer: torch.optim.Optimizer
+        The optimizer to load the state into.
+
+    Returns
+    -------
+    int
+        The iteration number loaded from the checkpoint.
+    """
+    checkpoint = torch.load(src)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    iteration = checkpoint["iteration"]
+    return iteration
