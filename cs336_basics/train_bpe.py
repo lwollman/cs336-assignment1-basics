@@ -1,97 +1,102 @@
 """
-Problem (train_bpe): 
-BPE Tokenizer Training (15 points)  
+Problem (train_bpe):
+BPE Tokenizer Training (15 points)
 
-Deliverable: Write a function that, given a path to an input text file, trains a (byte-level) BPE tokenizer. 
-Your BPE training function should handle (at least) the following input parameters:  
-- input_path: str Path to a text file with BPE tokenizer training data.  
-- vocab_size: int A positive integer that defines the maximum final vocabulary size 
-  (including the initial byte vocabulary, vocabulary items produced from merging, and any special tokens).  
-- special_tokens: list[str] A list of strings to add to the vocabulary. These special tokens do not 
-otherwise affect BPE training.  
+Deliverable: Write a function that, given a path to an input text file, trains a
+(byte-level) BPE tokenizer. Your BPE training function should handle (at least) the
+following input parameters:
+- input_path: str Path to a text file with BPE tokenizer training data.
+- vocab_size: int A positive integer that defines the maximum final vocabulary size
+  (including the initial byte vocabulary, vocabulary items produced from merging, and
+  any special tokens).
+- special_tokens: list[str] A list of strings to add to the vocabulary. These special
+tokens do not otherwise affect BPE training.
 
-Your BPE training function should return the resulting vocabulary and merges:  
-vocab: dict[int, bytes] The tokenizer vocabulary, a mapping from int (token ID in the vocabulary) to bytes (token bytes).
-merges: list[tuple[bytes, bytes]] A list of BPE merges produced from training. Each list item is a tuple of 
-bytes (<token1>, <token2>), representing that <token1> was merged with <token2>. The merges should be ordered
- by order of creation.  
- 
- To test your BPE training function against our provided tests, you will first need to implement the test 
- adapter at [adapters.run_train_bpe]. Then, run uv run pytest tests/test_train_bpe.py. Your implementation 
- should be able to pass all tests. Optionally (this could be a large time-investment), you can implement 
- the key parts of your training method using some systems language, for instance C++ (consider cppyy for this) 
- or Rust (using PyO3). If you do this, be aware of which operations require copying vs reading directly from 
- Python memory, and make sure to leave build instructions, or make sure it builds using only pyproject.toml. 
- Also note that the GPT-2 regex is not well-supported in most regex engines and will be too slow in most that 
- do. We have verified that Oniguruma is reasonably fast and supports negative lookahead, but the regex 
- package in Python is, if anything, even faster.
+Your BPE training function should return the resulting vocabulary and merges:
+vocab: dict[int, bytes] The tokenizer vocabulary, a mapping from int (token ID in the
+vocabulary) to bytes (token bytes).
+merges: list[tuple[bytes, bytes]] A list of BPE merges produced from training. Each
+list item is a tuple of bytes (<token1>, <token2>), representing that <token1> was
+merged with <token2>. The merges should be ordered by order of creation.
 
- It maybe helpful to look at 
- tests/fixtures/train-bpe-reference-merges.txt
-tests/fixtures/train-bpe-reference-vocab.json
+To test your BPE training function against our provided tests, you will first need to
+implement the test adapter at [adapters.run_train_bpe]. Then, run
+`uv run pytest tests/test_train_bpe.py`.
+Your implementation should be able to pass all tests. Optionally (this could be a large
+time-investment), you can implement the key parts of your training method using some
+systems language, for instance C++ (consider cppyy for this)or Rust (using PyO3). If you
+do this, be aware of which operations require copying vs reading directly from Python
+memory, and make sure to leave build instructions, or make sure it builds using only
+pyproject.toml. Also note that the GPT-2 regex is not well-supported in most regex
+engines and will be too slow in most that do. We have verified that Oniguruma is
+reasonably fast and supports negative lookahead, but the regex package in Python is, if
+anything, even faster.
+
+It maybe helpful to look at
+- tests/fixtures/train-bpe-reference-merges.txt
+- tests/fixtures/train-bpe-reference-vocab.json
 to see sample output from a method like this.
 
 
 > uv run cs336_basics/train_bpe.py
 > uv run pytest
 
-===================================== 46 failed, 2 skipped, 1 warning in 19.85s =====================================
-
-"""
-
-""" 
 2026-04-07
 
-The BPE going from BPE'd integers to unicode characters and sequences of them is  simple.  Each integers maps
-to some string of unicode characters, and the BPE merges are just a list of pairs of strings that were merged together.
+The BPE going from BPE'd integers to unicode characters and sequences of them is simple.
+Each integer maps to some string of unicode characters, and the BPE merges are just a
+list of pairs of strings that were merged together.
 
-Going the other ways used to confuse me ... becuase, if I encode, for example, "at" as 257, and "cat" as 1049, 
-then how would i know how to encode scatalogical?
+Going the other ways used to confuse me ... becuase, if I encode, for example, "at" as
+257, and "cat" as 1049, then how would i know how to encode "scatalogical"?
 
-The trick is that you learned the extra tokens one at a time, by stufyding the trianing data and
-observiubg the most common pairs of integers.  So when performing the BPE mapping from the text to the integers, 
-we start with simple unicode ("step zero") and then iterate, 
-in the next step we would apply the first learned pairing (such as "a + t" is really commong)
-and then, in the next step , ... and so on.
-
-
+The trick is that you learned the extra tokens one at a time, by studying the training
+data and observing the most common pairs of integers.  So when performing the BPE
+mapping from the text to the integers, we start with simple unicode ("step zero") and
+then iterate. In the next step we would apply the first learned pairing (such as "a + t"
+ is really common) and then, in the next step , ... and so on.
 
 It may be required to  store the training data as numpy arrays.
 
-Note on collections.Counter: A Counter is a dict subclass for counting hashable objects. 
-It is an unordered collection where elements are stored as dictionary keys and their 
-counts are stored as dictionary values. Counts are allowed to be any integer value 
-including zero or negative counts. The Counter class is a part of the collections 
-module in Python's standard library and provides convenient methods for counting and 
+Note on collections.Counter: A Counter is a dict subclass for counting hashable objects.
+It is an unordered collection where elements are stored as dictionary keys and their
+counts are stored as dictionary values. Counts are allowed to be any integer value
+including zero or negative counts. The Counter class is a part of the collections
+module in Python's standard library and provides convenient methods for counting and
 manipulating counts of objects.
 Primary Function: It automatically tallies the frequency of elements in an iterable
 (like a list or string) without requiring manual loops.
 """
 
+import pathlib
+# from collections import Counter
+from itertools import chain
 # from loguru import logger
 from typing import Literal, Optional, Union
-from collections import Counter
 
-import pathlib
 import regex
 
+from cs336_basics import CS336_BASICS_ROOT
 
-ASSIGNEMNT_FOLDER = pathlib.Path.home().joinpath("software/sound_thinking/stanford_cs/cs336-assignment1-basics")
-DATA_FOLDER = ASSIGNEMNT_FOLDER.joinpath("data")
+DATA_FOLDER = CS336_BASICS_ROOT.joinpath("data")
 print(f"data folder = {DATA_FOLDER}")
 assert DATA_FOLDER.exists()
-DEFAULT_SPECIAL_TOKENS = ["<|endoftext|>", "qokka"]  # [ b"<unk>", b"<pad>", b"<s>", b"</s>", ]
+DEFAULT_SPECIAL_TOKENS = [
+    "<|endoftext|>",
+    "qokka",
+]  # [ b"<unk>", b"<pad>", b"<s>", b"</s>", ]  # noqa E501
 TOY_INPUT_FILE = DATA_FOLDER.joinpath("toy_string.txt")
-DEFAULT_PRETOKENIZE_PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+DEFAULT_PRETOKENIZE_PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""  # noqa E501
 DEFAULT_PRETOKENIZE_REGEX = regex.compile(DEFAULT_PRETOKENIZE_PATTERN)
 
 
 def make_initial_vocab(debug: bool = False) -> dict[int, bytes]:
-    """ 
-    Create the initial vocabulary mapping each byte value (0-255) to its corresponding byte representation.
+    """
+    Create the initial vocabulary mapping each byte value (0-255) to its corresponding
+    byte representation.
 
     This example taken from Ron's
-    https://github.com/rmayer-sst/stanford-cs336-assignment1-basics/blob/ron/cs336_basics/ron_train_bpe.py
+    https://github.com/rmayer-sst/stanford-cs336-assignment1-basics/blob/ron/cs336_basics/ron_train_bpe.py  # noqa E501
 
     Parameters:
     -----------
@@ -112,9 +117,9 @@ def make_initial_vocab(debug: bool = False) -> dict[int, bytes]:
 
 
 def train_bpe(
-        input_path: Union[str, pathlib.Path] = TOY_INPUT_FILE,
-        vocab_size: int = 256 * 10,
-        special_tokens: list[str] = DEFAULT_SPECIAL_TOKENS,
+    input_path: Union[str, pathlib.Path] = TOY_INPUT_FILE,
+    vocab_size: int = 256 * 10,
+    special_tokens: list[str] = DEFAULT_SPECIAL_TOKENS,
 ):
     """
 
@@ -124,102 +129,110 @@ def train_bpe(
         text file with BPE tokenizer training data.
     vocab_size: int
         A positive integer that defines the maximum final vocabulary size.
-    special_tokens: list[str] 
-        A list of strings to add to the vocabulary. These special tokens do not otherwise affect BPE training.  
+    special_tokens: list[str]
+        A list of strings to add to the vocabulary. These special tokens do not
+        otherwise affect BPE training.
 
     Returns:
     -------
-    vocab: dict[int, bytes] 
-        The tokenizer vocabulary, a mapping from int (token ID in the vocabulary) to bytes (token bytes).
-    merges: list[tuple[bytes, bytes]] 
-        A list of BPE merges produced from training. Each list item is a tuple of bytes (<token1>, <token2>), 
-        representing that <token1> was merged with <token2>. The merges should be ordered by order of creation.  
+    vocab: dict[int, bytes]
+        The tokenizer vocabulary, a mapping from int (token ID in the vocabulary) to
+        bytes (token bytes).
+    merges: list[tuple[bytes, bytes]]
+        A list of BPE merges produced from training. Each list item is a tuple of bytes
+        (<token1>, <token2>),representing that <token1> was merged with <token2>.
+        The merges should be ordered by order of creation.
 
     Development Notes:
     Main Steps:
-        - special tokens splits (e.g. remove weird characters that are used to navigate document, not communicate language meaning)
+        - special tokens splits (e.g. remove weird characters that are used to navigate
+        the document, not communicate language meaning)
         - Pretokenize (Use re.finditer() and read the docs)
         - Convert pretokenized data into UTF-8 Bytes
-        - 
+        - Train BPE merges on the byte-level representation
+
     """
     vocab = make_initial_vocab()
-    merges = []
+    # merges = []
     new_vocab_idx = len(vocab)
 
     # add special tokens to vocab
     for st in special_tokens:
-        vocab[new_vocab_idx] = st.encode('utf-8')
+        vocab[new_vocab_idx] = st.encode("utf-8")
         new_vocab_idx += 1
 
     # get input text
     with open(input_path) as f:
         text = f.read()
     print(f"Original text\n {text}")
-    
+
     # Apply special splits
     splitted_text = split_on_special_tokens(
-        input_string=text,
-        special_tokens=special_tokens, 
-        rejoin=False
-        )
-    
-    # Here we rejoin the splitted text with spaces, but we could also keep it as a list 
-    # of strings and pretokenize each separately -- offering an opportunity for parallelization.
-    # print(f"special_splitted_text\n {splitted_text}")
-    text_without_special_tokens = " ".join(splitted_text)
+        input_string=text, special_tokens=special_tokens, rejoin=False
+    )
 
+    # Here we rejoin the splitted text with spaces, but we could also keep it as a list
+    # of strings and pretokenize each separately -- offering an opportunity for
+    # parallelization.
+    # print(f"special_splitted_text\n {splitted_text}")
+    # text_without_special_tokens = " ".join(splitted_text)
 
     # Pretokenize
-    # TODO: consider placing the for loop outside the pretokenizer to help 
+    # TODO: consider placing the for loop outside the pretokenizer to help
     # with parallelization.
-    pretokenized_text = pretokenize(text_without_special_tokens)
+
+    pretokenized_text = list(
+        chain.from_iterable(pretokenize(segment) for segment in splitted_text)
+    )
     print(f"Pretokenized text\n {pretokenized_text}")
 
     # Now that you have the pretokenized text, you can convert it to bytes and then
     # train the BPE merges on the byte-level representation.
     print("TODO: FIXME Transform to Bytes")
 
-    #bytes = 
+    # bytes =
 
-    return 
-          
+    return
+
 
 def split_on_special_tokens(
-        input_string: str,
-        special_tokens: list[str],
-        rejoin: bool = True
-        )-> Union[list[str], str]:
+    input_string: str, special_tokens: list[str], rejoin: bool = True
+) -> Union[list[str], str]:
     """
-        Split a string on special tokens.
+    Split a string on special tokens.
 
-        Parameters
-        ----------
-        input_string : str
-            The input string to be split.
-        special_tokens : list of str or str
-            Special tokens to split the input string on. Each occurrence of a special token will be used as a split point.
-        rejoin : bool, optional
-            If True, the resulting list of strings will be joined into a single string separated by spaces. 
-            If False, returns a list of split strings. Default is True.
+    Parameters
+    ----------
+    input_string : str
+        The input string to be split.
+    special_tokens : list of str or str
+        Special tokens to split the input string on. Each occurrence of a special token
+        will be used as a split point.
+    rejoin : bool, optional
+        If True, the resulting list of strings will be joined into a single string
+        separated by spaces.
+        If False, returns a list of split strings. Default is True.
 
-        Returns
-        -------
-        splitted: Union[list[str], str]
-            The input string split on the special tokens. If `rejoin` is True, returns a single-element list containing the joined string.
-            Note that the split operation (string chunking) will drop all the special_tokens.
-        
+    Returns
+    -------
+    splitted: Union[list[str], str]
+        The input string split on the special tokens. If `rejoin` is True, returns a
+        single-element list containing the joined string.
+        Note the split operation (string chunking) will drop all the special_tokens.
 
-        Examples
-        --------
-        >>> split_on_special_tokens("Hello <|endoftext|> world", ["<|endoftext|>"])
-        ['Hello  world']
 
-        >>> split_on_special_tokens("foo bar baz", ["bar"], rejoin=False)
-        ['foo ', ' baz']
+    Examples
+    --------
+    >>> split_on_special_tokens("Hello <|endoftext|> world", ["<|endoftext|>"])
+    ['Hello  world']
 
-        TODO: Discuss; if we want to rename this to drop_special_tokens and return the joined output?
+    >>> split_on_special_tokens("foo bar baz", ["bar"], rejoin=False)
+    ['foo ', ' baz']
+
+    TODO: Discuss; if we want to rename this to drop_special_tokens and return the
+    joined output?
     """
-    
+
     # sorted_tokens = special_tokens.sort()
     pattern = "|".join(regex.escape(st) for st in special_tokens)
     splitted = regex.split(pattern=pattern, string=input_string)
@@ -230,17 +243,17 @@ def split_on_special_tokens(
 
 
 def pretokenize(
-        text: str,
-        regex_pattern: Optional[str] = DEFAULT_PRETOKENIZE_REGEX,
-        method: Literal["regex_findall", "regex_finditer"] = "regex_findall"
-        ) -> list[str]:
+    text: str,
+    regex_pattern: Optional[str] = DEFAULT_PRETOKENIZE_REGEX,
+    method: Literal["regex_findall", "regex_finditer"] = "regex_findall",
+) -> list[str]:
     """
     Parameters
     ----------
     text : str
         The input string to be pretokenized.
     regex_pattern : str, optional
-        The regular expression pattern to use for pretokenization. 
+        The regular expression pattern to use for pretokenization.
         Default is a pattern that matches common English contractions, letters, numbers,
         and punctuation.
     method : Literal["regex_findall", "regex_finditer"], optional
@@ -257,7 +270,8 @@ def pretokenize(
         ['some', ' text', ' that', ' i', "'ll", ' pre', '-', 'tokenize']
 
 
-    TODO: review usage of 'match', 'pattern', 'search' methods of <class '_regex.Scanner'>
+    TODO: review usage of 'match', 'pattern', 'search' methods of
+    <class '_regex.Scanner'>
 
     """
     if method == "regex_findall":
@@ -267,11 +281,15 @@ def pretokenize(
         # output = [match.group(0) for match in regex.finditer(regex_pattern, text)]
         output = [match.group(0) for match in regex_pattern.finditer(text)]
     else:
-        raise ValueError(f"Invalid method: {method}. Must be 'regex_findall' or 'regex_finditer'.")
+        raise ValueError(
+            f"Invalid method: {method}. Must be 'regex_findall' or 'regex_finditer'."
+        )
     return output
+
 
 def main():
     train_bpe()
+
 
 if __name__ == "__main__":
     main()
