@@ -58,11 +58,19 @@ and then, in the next step , ... and so on.
 
 It may be required to  store the training data as numpy arrays.
 
-
+Note on collections.Counter: A Counter is a dict subclass for counting hashable objects. 
+It is an unordered collection where elements are stored as dictionary keys and their 
+counts are stored as dictionary values. Counts are allowed to be any integer value 
+including zero or negative counts. The Counter class is a part of the collections 
+module in Python's standard library and provides convenient methods for counting and 
+manipulating counts of objects.
+Primary Function: It automatically tallies the frequency of elements in an iterable
+(like a list or string) without requiring manual loops.
 """
 
 # from loguru import logger
 from typing import Literal, Optional, Union
+from collections import Counter
 
 import pathlib
 import regex
@@ -151,9 +159,12 @@ def train_bpe(
     # Apply special splits
     splitted_text = split_on_special_tokens(
         input_string=text,
-        special_tokens=special_tokens
+        special_tokens=special_tokens, 
+        rejoin=False
         )
     
+    # Here we rejoin the splitted text with spaces, but we could also keep it as a list 
+    # of strings and pretokenize each separately -- offering an opportunity for parallelization.
     # print(f"special_splitted_text\n {splitted_text}")
     text_without_special_tokens = " ".join(splitted_text)
 
