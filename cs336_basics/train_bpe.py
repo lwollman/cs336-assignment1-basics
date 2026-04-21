@@ -62,7 +62,7 @@ It may be required to  store the training data as numpy arrays.
 """
 
 # from loguru import logger
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import pathlib
 import regex
@@ -74,6 +74,8 @@ print(f"data folder = {DATA_FOLDER}")
 assert DATA_FOLDER.exists()
 DEFAULT_SPECIAL_TOKENS = ["<|endoftext|>", "qokka"]  # [ b"<unk>", b"<pad>", b"<s>", b"</s>", ]
 TOY_INPUT_FILE = DATA_FOLDER.joinpath("toy_string.txt")
+DEFAULT_PRETOKENIZE_REGEX = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+
 
 def make_initial_vocab(debug: bool = False) -> dict[int, bytes]:
     """ 
@@ -81,7 +83,7 @@ def make_initial_vocab(debug: bool = False) -> dict[int, bytes]:
 
     This example taken from Ron's
     https://github.com/rmayer-sst/stanford-cs336-assignment1-basics/blob/ron/cs336_basics/ron_train_bpe.py
-    
+
     Parameters:
     -----------
     debug: bool
@@ -134,6 +136,12 @@ def train_bpe(
     vocab = make_initial_vocab()
     merges = []
     new_vocab_idx = len(vocab)
+
+    # add special tokens to vocab
+    for st in special_tokens:
+        vocab[new_vocab_idx] = st.encode('utf-8')
+        new_vocab_idx += 1
+
     # get input text
     with open(input_path) as f:
         text = f.read()
@@ -144,17 +152,19 @@ def train_bpe(
         input_string=text,
         special_tokens=special_tokens
         )
-    print(f"special_splitted_text\n {splitted_text}")
+    
+    # print(f"special_splitted_text\n {splitted_text}")
+    text_without_special_tokens = " ".join(splitted_text)
+
 
     # Pretokenize
     # TODO: consider placing the for loop outside the pretokenizer to help 
     # with parallelization.
-    pretokenized_text = pretokenize(splitted_text)
+    pretokenized_text = pretokenize(text_without_special_tokens)
     print(f"Pretokenized text\n {pretokenized_text}")
 
-    # Now that you have the pretokenized text, you can convert it to bytes and then train the BPE merges on the byte-level representation.
-
-
+    # Now that you have the pretokenized text, you can convert it to bytes and then
+    # train the BPE merges on the byte-level representation.
     print("TODO: FIXME Transform to Bytes")
 
     #bytes = 
@@ -208,16 +218,21 @@ def split_on_special_tokens(
 
 
 def pretokenize(
-        strings: list[str],
-        regex_pattern: Optional[str] = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""",
+        text: str,
+        regex_pattern: Optional[str] = DEFAULT_PRETOKENIZE_REGEX,
+        method: Literal["regex_findall", "regex_finditer"] = "regex_findall"
         ) -> list[str]:
-    '''
+    """
     Parameters
     ----------
-    strings : list of str
-        The input strings to be pretokenized.
+    text : str
+        The input string to be pretokenized.
     regex_pattern : str, optional
-        The regular expression pattern to use for pretokenization. Default is a pattern that matches common English contractions, letters, numbers, and punctuation.
+        The regular expression pattern to use for pretokenization. 
+        Default is a pattern that matches common English contractions, letters, numbers,
+        and punctuation.
+    method : Literal["regex_findall", "regex_finditer"], optional
+        The method to use for pretokenization. Default is "regex_findall".
 
     Returns
     -------
@@ -232,12 +247,11 @@ def pretokenize(
 
     TODO: review usage of 'match', 'pattern', 'search' methods of <class '_regex.Scanner'>
 
-    '''
-    output = []
-    for element in strings:
-        splitted = regex.finditer(regex_pattern, element)
-        output.extend(splitted)
-
+    """
+    if method == "regex_findall":
+        output = regex.findall(regex_pattern, text)
+    elif method == "regex_finditer":
+        output = [match.group(0) for match in regex.finditer(regex_pattern, text)]
     return output
 
 def main():
