@@ -39,6 +39,28 @@ to see sample output from a method like this.
 
 """
 
+""" 
+2026-04-07
+
+The BPE going from BPE'd integers to unicode characters and sequences of them is  simple.  Each integers maps
+to some string of unicode characters, and the BPE merges are just a list of pairs of strings that were merged together.
+
+Going the other ways used to confuse me ... becuase, if I encode, for example, "at" as 257, and "cat" as 1049, 
+then how would i know how to encode scatalogical?
+
+The trick is that you learned the extra tokens one at a time, by stufyding the trianing data and
+observiubg the most common pairs of integers.  So when performing the BPE mapping from the text to the integers, 
+we start with simple unicode ("step zero") and then iterate, 
+in the next step we would apply the first learned pairing (such as "a + t" is really commong)
+and then, in the next step , ... and so on.
+
+
+
+It may be required to  store the training data as numpy arrays.
+
+
+"""
+
 # from loguru import logger
 from typing import Optional, Union
 
@@ -52,6 +74,31 @@ print(f"data folder = {DATA_FOLDER}")
 assert DATA_FOLDER.exists()
 DEFAULT_SPECIAL_TOKENS = ["<|endoftext|>", "qokka"]  # [ b"<unk>", b"<pad>", b"<s>", b"</s>", ]
 TOY_INPUT_FILE = DATA_FOLDER.joinpath("toy_string.txt")
+
+def make_initial_vocab(debug: bool = False) -> dict[int, bytes]:
+    """ 
+    Create the initial vocabulary mapping each byte value (0-255) to its corresponding byte representation.
+
+    This example taken from Ron's
+    https://github.com/rmayer-sst/stanford-cs336-assignment1-basics/blob/ron/cs336_basics/ron_train_bpe.py
+    
+    Parameters:
+    -----------
+    debug: bool
+        If True, print the initial vocabulary for debugging purposes.
+
+    Returns:
+    --------
+    dict[int, bytes]
+        A dictionary mapping each byte value to its corresponding byte representation.
+    """
+    vocab = {i: bytes([i]) for i in range(256)}
+    if debug:
+        print(f"Initial vocab: {vocab}")
+        for k, v in vocab.items():
+            print(f"{k}: {v}, {v.decode('utf-8', errors='replace')}")
+    return vocab
+
 
 def train_bpe(
         input_path: Union[str, pathlib.Path] = TOY_INPUT_FILE,
@@ -84,6 +131,9 @@ def train_bpe(
         - Convert pretokenized data into UTF-8 Bytes
         - 
     """
+    vocab = make_initial_vocab()
+    merges = []
+    new_vocab_idx = len(vocab)
     # get input text
     with open(input_path) as f:
         text = f.read()
@@ -102,11 +152,14 @@ def train_bpe(
     pretokenized_text = pretokenize(splitted_text)
     print(f"Pretokenized text\n {pretokenized_text}")
 
+    # Now that you have the pretokenized text, you can convert it to bytes and then train the BPE merges on the byte-level representation.
+
+
     print("TODO: FIXME Transform to Bytes")
 
     #bytes = 
 
-    return
+    return 
           
 
 def split_on_special_tokens(
@@ -159,20 +212,32 @@ def pretokenize(
         regex_pattern: Optional[str] = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""",
         ) -> list[str]:
     '''
+    Parameters
+    ----------
+    strings : list of str
+        The input strings to be pretokenized.
+    regex_pattern : str, optional
+        The regular expression pattern to use for pretokenization. Default is a pattern that matches common English contractions, letters, numbers, and punctuation.
 
-    TODO: add fancy tools like
-    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+    Returns
+    -------
+    list of str
+        The pretokenized strings.
 
-    review usage of 'match', 'pattern', 'search' methods of <class '_regex.Scanner'>
+        >>> # requires `regex` package
+        >>> import regex as re
+        >>> re.findall(PAT, "some text that i'll pre-tokenize")
+        ['some', ' text', ' that', ' i', "'ll", ' pre', '-', 'tokenize']
+
+
+    TODO: review usage of 'match', 'pattern', 'search' methods of <class '_regex.Scanner'>
 
     '''
     output = []
     for element in strings:
-        # splitted = element.split()
         splitted = regex.finditer(regex_pattern, element)
         output.extend(splitted)
 
-    # output = input_string.split()
     return output
 
 def main():
