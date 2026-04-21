@@ -74,7 +74,8 @@ print(f"data folder = {DATA_FOLDER}")
 assert DATA_FOLDER.exists()
 DEFAULT_SPECIAL_TOKENS = ["<|endoftext|>", "qokka"]  # [ b"<unk>", b"<pad>", b"<s>", b"</s>", ]
 TOY_INPUT_FILE = DATA_FOLDER.joinpath("toy_string.txt")
-DEFAULT_PRETOKENIZE_REGEX = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+DEFAULT_PRETOKENIZE_PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+DEFAULT_PRETOKENIZE_REGEX = regex.compile(DEFAULT_PRETOKENIZE_PATTERN)
 
 
 def make_initial_vocab(debug: bool = False) -> dict[int, bytes]:
@@ -249,9 +250,13 @@ def pretokenize(
 
     """
     if method == "regex_findall":
-        output = regex.findall(regex_pattern, text)
+        # output = regex.findall(regex_pattern, text)
+        output = regex_pattern.findall(text)
     elif method == "regex_finditer":
-        output = [match.group(0) for match in regex.finditer(regex_pattern, text)]
+        # output = [match.group(0) for match in regex.finditer(regex_pattern, text)]
+        output = [match.group(0) for match in regex_pattern.finditer(text)]
+    else:
+        raise ValueError(f"Invalid method: {method}. Must be 'regex_findall' or 'regex_finditer'.")
     return output
 
 def main():
