@@ -5,7 +5,6 @@ Codes that we will plug into adapters.py
 
 import math
 import os
-import typing
 from typing import IO, BinaryIO, Optional, Tuple
 
 import einx
@@ -47,8 +46,6 @@ class Linear(torch.nn.Module):
             Data type of the parameters):
         """
         super().__init__()
-        sigma_squared = 2.0 / (in_features + out_features)
-        sigma = math.sqrt(sigma_squared)
         weights = torch.empty(out_features, in_features)
         weights = torch.nn.init.trunc_normal_(
             weights, mean=0.0, std=3.01, a=-0.02, b=0.02  # This is usually 1.
@@ -63,7 +60,11 @@ class Linear(torch.nn.Module):
         """
         Apply the linear transformation to the input.
         Make sure to:
-        subclass nn.Module  • call the superclass constructor  • construct and store your parameter as W (not W ⊤) for memory ordering reasons, putting it in an nn.Parameter  • of course, don’t use nn.Linear or nn.functional.linear
+        - subclass nn.Module
+        - call the superclass constructor
+        - construct and store your parameter as W (not W ⊤) for memory ordering reasons,
+         putting it in an nn.Parameter
+        - of course, don’t use nn.Linear or nn.functional.linear
         """
         print(x.shape)  # 4 , 12, 64
         print(self.weights.shape)
@@ -79,14 +80,15 @@ class Embedding(torch.nn.Module):
     """
     Embedding lookup module.
 
-    Defines a matrix of size num_embeddings (vocabulary size) by embedding_dim (d_model).
-    Thus, this is really just a lookup table of the embedded vectors for each element of the vocabulary.
-    Conventionally, E is an element of R_{n_vocab, d_model} and each row corresponds to an embedded token.
+    Defines a matrix of size num_embeddings by embedding_dim (vocabulary size x d_model)
+    Thus, this is really just a lookup table of the embedded vectors for each element of
+    the vocabulary. Conventionally, E is an element of R_{n_vocab, d_model} and each row
+    corresponds to an embedded token.
 
-    It is interesting to note that this is initialized randomly, on a truncated normal distrubution,
-    and this means that the embedded vector length will be random as well, but will tend to have
-    length [TODO: check this -- sqrt(d_model)] as it is a random walk of d_model steps, where the step
-    size is normally 1.
+    It is interesting to note that this is initialized randomly, on a truncated normal
+    distrubution, and this means that the embedded vector length will be random as well,
+    but will tend to have length [TODO: check this -- sqrt(d_model)] as it is a random
+    walk of d_model steps, where the step size is normally 1.
 
     Methods
     -------
@@ -97,7 +99,8 @@ class Embedding(torch.nn.Module):
     -----
     - Subclass of nn.Module.
     - Embedding matrix is initialized as nn.Parameter.
-    - The embedding matrix has shape (num_embeddings, embedding_dim), with d_model as the final dimension.
+    - The embedding matrix has shape (num_embeddings, embedding_dim), with d_model as
+    the final dimension.
     - Uses torch.nn.init.trunc_normal_ for initialization.
     - Does not use nn.Embedding or nn.functional.embedding.
 
@@ -155,10 +158,10 @@ class RMSLayerNormalization(torch.nn.Module):
     Problem (rmsnorm): Root Mean Square Layer Normalization (1 point)
     Deliverable: Implement RMSNorm as a torch.nn.Module.
 
-    Note: Remember to upcast your input to torch.float32 before performing the normalization (and
-    later downcast to the original dtype), as described above.
-    To test your implementation, implement the test adapter at [adapters.run_rmsnorm]. Then, run uv
-    run pytest -k test_rmsnorm.
+    Note: Remember to upcast your input to torch.float32 before performing the
+    normalization (and later downcast to the original dtype), as described above.
+    To test your implementation, implement the test adapter at [adapters.run_rmsnorm].
+    uv run pytest -k test_rmsnorm.
     """
 
     def __init__(
@@ -197,26 +200,12 @@ class RMSLayerNormalization(torch.nn.Module):
     def eps(self) -> float:
         return self._eps
 
-    def forward_crude(self, a: torch.Tensor) -> torch.Tensor:
-        """
-        This example uses very crude logic.
-        Process an input tensor of shape (batch_size, sequence_length, d_model) and return a tensor of the same shape.
-
-        Normalize the input tensor by the scalar RMS(a) -- see Equation (4) in the notes.
-
-        """
-
-        a_squared = a**2.0  # x.pow.
-        rms_a = a_squared.mean(axis=-1) + self.eps  #
-        norm_rms = a / rms_a
-
-        return self.mc_rms
-
     def forward(self, a: torch.Tensor) -> torch.Tensor:
         """
-        Process an input tensor of shape (batch_size, sequence_length, d_model) and return a tensor of the same shape.
+        Process an input tensor of shape (batch_size, sequence_length, d_model) and
+        return a tensor of the same shape.
 
-        Normalize the input tensor by the scalar RMS(a) -- see Equation (4) in the notes.
+        Normalize input tensor by the scalar RMS(a) -- see Equation (4) in the notes.
         """
         DEBUG = True
         if DEBUG:
@@ -227,7 +216,6 @@ class RMSLayerNormalization(torch.nn.Module):
 
         # Use einx
         a_squared_einx = einx.dot("..., ... -> ...", a_float32, a_float32)
-        a_squared = a_float32**2.0  # x.pow.
         # this uses 2*np.prod(a_float32.shape) FLOPS
 
         # use a space to separate dimensions in the einx input string.
@@ -239,10 +227,10 @@ class RMSLayerNormalization(torch.nn.Module):
         )
         rms_a_einx = ms_a_einx.pow(0.5)
 
-        ms_a = (
-            a_squared.mean(axis=-1) + self.eps
-        )  # + d_model FLOPS to take the mean, +1 for the addition of eps
-        # rms_a = ms_a.pow(0.5)
+        # ms_a = (
+        #     a_squared.mean(axis=-1) + self.eps
+        # )  # + d_model FLOPS to take the mean, +1 for the addition of eps
+        # # rms_a = ms_a.pow(0.5)
 
         # norm_rms = a_float32 / rms_a. # has wrong dims because lost one in mean
         norm_rms_einx = a_float32 / rms_a_einx  # dims OK here becaue of kkeepdims
@@ -250,7 +238,6 @@ class RMSLayerNormalization(torch.nn.Module):
         weighted = self.g * norm_rms_einx
         if DEBUG:
             logger.debug(f" weighted final output of shape {weighted.shape}")
-            # logger.debug(f" weighted final output {weighted} output of shape {weighted.shape}")
 
         return weighted.to(in_dtype)
 
@@ -262,14 +249,13 @@ class SwiGLUFFN(torch.nn.Module):
     Implement the SwiGLU feed-forward network, composed of a SiLU activation
     function and a GLU.
 
-    **Note**: In this particular case, you should feel free to use torch.sigmoid in your implementation
-    for numerical stability.
+    **Note**: In this particular case, you should feel free to use torch.sigmoid in
+    your implementation for numerical stability.
 
-    You should set dff to approximately 8/3 × dmodel in your implementation, while ensuring that
-    the dimensionality of the inner feed-forward layer is a multiple of 64 to make good use of your
-    hardware.
-    To test your implementation against our provided tests, you will need to implement
-    the test adapter at [adapters.run_swiglu].
+    You should set dff to approximately 8/3 × dmodel in your implementation, while
+    ensuring that the dimensionality of the inner feed-forward layer is a multiple of
+    64 to make good use of your hardware. To test your implementation against our
+    provided tests, you will need to implement the test adapter [adapters.run_swiglu].
 
     Then, run uv run pytest -k test_swiglu to test your implementation.
     """
@@ -328,33 +314,36 @@ class RotaryPositionalEmbedding(torch.nn.Module):
     """
     From page 24/50 of the Assigment1 pdf
 
-    Deliverable: Implement a class RotaryPositionalEmbedding that applies RoPE to the input tensor.
+    Deliverable: Implement a class RotaryPositionalEmbedding that applies RoPE to the
+    input tensor.
 
-    This basically amounts to creating the R rotation matrix and applying it... but constructing
-    the specific instance of the R matrix that you will use to apply RoPE in the forward methods
-    requires wrangling the indices i, k.
+    This basically amounts to creating the R rotation matrix and applying it...
+    but constructing the specific instance of the R matrix that you will use to apply
+    RoPE in the forward methods requires wrangling the indices i, k.
     i is the position of a token within a given sequence ... (this may seem a bit weird
-    at first, that the rotation is not tied to the token's position or order in the vocabulary,
-    but rather in the sequence, and that the same token willl be rotated differently based on its position
-    within a sequence, but this is actually fundamental to how rope (and positional encoding
-    transformations in general) works.
+    at first, that the rotation is not tied to the token's position or order in the
+    vocabulary, but rather in the sequence, and that the same token willl be rotated
+    differently based on its position within a sequence, but this is actually
+    fundamental to how rope (and positional encoding transformations in general) works.
 
     There is one R matrix for each relative position i.
 
     , but RoPE forward method will normally combine
-    submatrices from many of the R_i of equation 9 (or R_i^k of Eqn 8) since it will probably be
-    normal to feed sequences of tokens
+    submatrices from many of the R_i of equation 9 (or R_i^k of Eqn 8) since it will
+    probably be normal to feed sequences of tokens
 
     References:
     The RoPE paper is worth looking at.
     For some shortcuts,
     ~/software/ramayer/google-colab-examples/HelloWorld_Transformer_with_RoPE.ipynb
-    goes through a use case where RoPE is actually used for a toy problem about predicting
-    the future value of a sinusoidal function.
+    goes through a use case where RoPE is actually used for a toy problem about
+    predicting the future value of a sinusoidal function.
+
     This tutorial uses fairly dense code.
 
-    A more "following the pdf" version of the RoPE stuffs can be found in Ron's RoPE notebook here:
-    https://github.com/rmayer-sst/stanford-cs336-assignment1-basics/blob/ron/cs336_basics/ron_rope.py
+    A more "following the pdf" version of the RoPE stuffs can be found in Ron's RoPE
+    notebook here:
+    https://github.com/rmayer-sst/stanford-cs336-assignment1-basics/blob/ron/cs336_basics/ron_rope.py  # noqa: E501
 
 
     To test your implementation, complete [adapters.run_rope] and make sure it passes
@@ -371,14 +360,16 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         Parameters
         ----------
         theta: float
-            Θ value for the RoPE (has value 10000 in the pdf ... should grow with sequence length)
+            Θ value for the RoPE (has value 10000 in the pdf ... should grow with
+            sequence length)
         d_k: int
             dimension of query and key vectors.
-            This is the dimension of a vector that gets multiplied by the $R^{i}$ matrix.
+            The dimension of a vector that gets multiplied by the $R^{i}$ matrix.
             This is not the embedding dimension (unless using single-headed attention).
             We do not need to worry about attention head splitting stuffs here.
-            But if we wanted to mention them ... the embedding dimension d is split approximately evenly
-            among the heads ... this module is concerned with operations on one of those chunks.
+            But if we wanted to mention them ... the embedding dimension d is split
+            approximately evenly among the heads ... this module is concerned with
+            operations on one of those chunks.
 
         max_seq_len: int
             Maximum sequence length that will be inputted.
@@ -416,12 +407,13 @@ class RotaryPositionalEmbedding(torch.nn.Module):
 
         # Put these into a "buffer" as they are not learned things ...
         # We used the "parameter" designation for things that are learned ..
-        # whereas, these "buffers" are designations for quantities we want to keep around (for efficiency)
-        # and are static -- not learned,
+        # whereas, these "buffers" are designations for quantities we want to keep
+        #  around (for efficiency) and are static -- not learned,
         # ...
-        # persistent=False says we dont care to store this in the praemters file
-        # data dertived features (such as empirical average signal strength) may wish to be saved.
-        # Once registered we can access them via self.name (self.cosine_table for example)
+        # persistent=False says we dont care to store this in the parameters file
+        # data derived features (such as empirical average signal strength) may wish to
+        # be saved. Once registered we can access them via self.name
+        # (self.cosine_table for example)
         #
         # to see your buffers:
         # print(list(self.named_buffers()))
@@ -440,8 +432,8 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         shape (..., seq_len) specifying the token positions of x along the sequence
         dimension.
 
-        You should use the token positions to slice your (possibly precomputed) cos and sin tensors along
-        the sequence dimension.
+        You should use the token positions to slice your (possibly precomputed) cos and
+        sin tensors along the sequence dimension.
 
         When this is finally working it will take the following form:
         - A tensor of shape (..., seq_len, d_k, d_k) will be formed called R
@@ -452,13 +444,14 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         x: torch.Tensor
             The embedded tokens that will be encoded with rotary operation
             shape is (..., seq_len, d_k).
-            d_k should be even so that the elements can be paired over 2D rotation matrices.
+            d_k should be even so that the elements can be paired over 2D rotation
+            matrices.
         token_positions: torch.Tensor
             A map of the token positions (within the sequence)
             (..., seq_len)
             These are going to be used to "seek into the cosine and sine tables"
             ...
-            it seems like we can either compute the R matrices for these token positions,
+            it seems we can either compute the R matrices for these token positions,
             or we can sort the tokens and then use a sequential R ... but if these
             are not just 1, 2, 3 ... seq_len .. then i guess
 
@@ -486,7 +479,7 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         return rotated_vectors
 
 
-def softmax(in_features: Float[Tensor, " ..."], dim: int) -> torch.Tensor:
+def softmax(in_features: Float[Tensor, " ..."], dim: int) -> torch.Tensor:  # noqa F722
     """
     Apply the softmax operation to the input tensor along the last dimension.
 
@@ -517,35 +510,37 @@ def softmax(in_features: Float[Tensor, " ..."], dim: int) -> torch.Tensor:
 
 
 def scaled_dot_product_attention(
-    queries: Float[Tensor, " ... n d_k"],
-    keys: Float[Tensor, " ... m d_k"],
-    values: Float[Tensor, " ... m d_v"],
-    mask: Optional[Float[Tensor, " ... queries key"]] = None,
-) -> Float[Tensor, " ... queries d_v"]:
+    queries: Float[Tensor, " ... n d_k"],  # noqa: F722
+    keys: Float[Tensor, " ... m d_k"],  # noqa: F722
+    values: Float[Tensor, " ... m d_v"],  # noqa: F722
+    mask: Optional[Float[Tensor, " ... queries key"]] = None,  # noqa: F722
+) -> Float[Tensor, " ... queries d_v"]:  # noqa: F722
     """
-    Deliverable: Implement the scaled dot-product attention (SDPA) mechanism as a function.
+    Deliverable: Implement the scaled dot-product attention (SDPA) mechanism.
 
-    ** from the assignment: ... but this looks like an error, the seq_len for q, k are not equal in general.**
-    Your implementation should handle keys and queries of shape (batch_size, ..., seq_len, d_k).
+    ** from the assignment: ... but this looks like an error, the seq_len for q, k are
+    not equal in general.**. Your implementation should handle keys and queries of shape
+    (batch_size, ..., seq_len, d_k).
 
-    Note: You should not use nn.MultiheadAttention or nn.functional.multi_head_attention_forward
-    in your implementation.
+    Note: You should not use nn.MultiheadAttention or
+    nn.functional.multi_head_attention_forward in your implementation.
 
-    To test your implementation, implement the test adapter at [adapters.run_sdpa]. Then, run
+    To test your implementation, implement the test adapter at [adapters.run_sdpa].
+    Then, run
     uv run pytest -k test_sdpa.
     uv run pytest -k test_scaled_dot_product_attention
 
-    TODO: Review the shapes of these inputs .. the assignment seems to call for the second
-    last dimension of q,k,v being "seq_len", but the auto AI doc, had the second last mode
-    being same for for Q,K, but allow different for V.  The reality seems to be k,v agree in the second
-    last mode, anbd q can be different (n,m)
-    these m,n relate to sequence length concept though, where as d_k is the token-subspace dimension.
-    It is along this d_k that the inner products are taken.
+    TODO: Review the shapes of these inputs .. the assignment seems to call for the
+    second last dimension of q,k,v being "seq_len", but the auto AI doc, had the second
+    last mode being same for for Q,K, but allow different for V.  The reality seems to
+    be k,v agree in the second last mode, anbd q can be different (n,m) these m,n
+    relate to sequence length concept though, where as d_k is the token-subspace
+    dimension.  It is along this d_k that the inner products are taken.
 
     Learning Notes:
-    - The attention scores are computed as the dot product of queries and keys, scaled by the
-      square root of the key dimension (d_k).
-      The dimension d_k is the only one that it makes sense to take an inner product over.
+    - The attention scores are computed as the dot product of queries and keys, scaled
+    by the square root of the key dimension (d_k). The dimension d_k is the only one
+    that it makes sense to take an inner product over.
 
     Parameters:
         queries: Float[Tensor, " ... queries d_k"]: Query tensor.
@@ -588,10 +583,6 @@ def scaled_dot_product_attention(
     masked_qk[~mask] = min_qk_elt
     softmaxed_masked_qk = softmax(masked_qk, dim=-1)
 
-    # old cruft here:
-    # masked_qk.masked_fill_(~mask, min_qk_elt)  # masked_fill_ modifies in place
-    # masked_qk = einx.dot("..., ... -> ...", qk, float_mask) + (1.0 - float_mask) # * (-1e9)
-
     # finally multiply by V
     A = einx.dot("... n m, ... m dv -> ... n dv", softmaxed_masked_qk, values)
 
@@ -602,17 +593,18 @@ class MultiheadedSelfAttention(torch.nn.Module):
     """
     Deliverable: Implement multi-headed self-attention as a torch.nn.Module.
 
-    Note: You should not use nn.MultiheadAttention or nn.functional.multi_head_attention_forward in your implementation.
+    Note: You should not use nn.MultiheadAttention or
+    nn.functional.multi_head_attention_forward in your implementation.
 
-    To test your implementation, implement the test adapter at [adapters.run_mhsa]. Then, run
+    To test your implementation, implement the test adapter at [adapters.run_mhsa].
 
     uv run pytest -k test_mhsa.
     uv run pytest -k test_multihead_self_attention
     uv run pytest -s -v tests/test_model.py::test_multihead_self_attention
 
     Development notes:
-    To implement multi-headed attention, we need to split the inputs into heads
-    then loop over the heads, applying out attention mechanism then concatenate the results
+    To implement multi-headed attention, we split the inputs into heads, then loop over
+    the heads, applying out attention mechanism then concatenate the results
     (this is equations 12-13 in the notes). d_k can be thought of as the "query size"
     """
 
@@ -676,7 +668,7 @@ class MultiheadedSelfAttention(torch.nn.Module):
             device=device,
             dtype=dtype,
         )
-        self.O = Linear(
+        self.O = Linear(  # noqa: E741
             in_features=d_v * num_heads,
             out_features=d_model,
             device=device,
@@ -700,8 +692,13 @@ class MultiheadedSelfAttention(torch.nn.Module):
         -------
         torch.Tensor
             Output tensor of shape (batch_size, seq_len, d_model).
-            Unexpected key(s) in state_dict: "q_proj.weights", "k_proj.weights", "v_proj.weights", "output_proj.weights".
+            Unexpected key(s) in state_dict: "q_proj.weights", "k_proj.weights",
+            "v_proj.weights", "output_proj.weights".
         """
+        logger.info(
+            f"MultiheadedSelfAttention forward called with input of shape {x.shape}"
+        )
+        b, s, d = x.shape
         d_k = self.d_model // self.num_heads
         d_v = self.d_model // self.num_heads
 
@@ -752,10 +749,11 @@ class MultiheadedSelfAttention(torch.nn.Module):
         mask = einx.rearrange(
             " q k ->1 1 q k", mask
         )  # broadcast to match batch and head dims
-        # logger.info(f"generated causal mask of shape. after rearrange: {mask.shape}")
-        mask = mask.repeat_interleave(self.num_heads, dim=0)  # repeat for each head
+        logger.info(f"generated causal mask of shape. after rearrange: {mask.shape}")
+        mask = mask.repeat_interleave(b, dim=0)  # repeat for each batch
+        logger.info(f"causal mask shape after repeat for batch: {mask.shape}")
         mask = mask.repeat_interleave(self.num_heads, dim=1)  # repeat for each head
-        logger.info(f"generated causal mask of shape. after repeat: {mask.shape}")
+        logger.info(f"causal mask shape after repeat for heads: {mask.shape}")
 
         A_for_all_heads_needs_reshaping = scaled_dot_product_attention(
             Q_reshaped, K_reshaped, V_reshaped, mask=mask
@@ -773,16 +771,15 @@ class MultiheadedSelfAttention(torch.nn.Module):
 
 class TransformerBlock(torch.nn.Module):
     """
-    Implement the pre-norm Transformer block as described in §3.5 and illustrated in Figure 2.
-    You Transformer block should accept (at least) the following parameters.
+    Implement the pre-norm Transformer block as described in §3.5 and illustrated in
+    Figure 2. Your Transformer block should accept (at least) the following parameters.
 
     d_model: int Dimensionality of the Transformer block inputs.
     num_heads: int Number of heads to use in multi-head self-attention.
     d_ff: int Dimensionality of the position-wise feed-forward inner layer.
 
-    To test your implementation, implement the adapter [adapters.run_transformer_block]. Then
-    run uv run pytest -k test_transformer_block to test your implementation.
-    Deliverable: Transformer block code that passes the provided test
+    To test your implementation, implement the adapter [adapters.run_transformer_block].
+    run uv run pytest -k test_transformer_block
 
     ...
     Aside, within MHSA, the Q,K is about mapping the input token to its meaning ...
@@ -860,7 +857,8 @@ class TransformerLanguageModel(torch.nn.Module):
     """
     Deliverable: Implement the Transformer language model as a torch.nn.Module.
 
-    To test your implementation, implement the test adapter at [adapters.run_transformer_lm]. Then, run
+    To test your implementation, implement the test adapter at
+    [adapters.run_transformer_lm].
     uv run pytest -k test_transformer_lm.
     """
 
@@ -896,6 +894,13 @@ class TransformerLanguageModel(torch.nn.Module):
             Maximum sequence length.
         """
         super().__init__()
+
+        # Check that the max_seq_len in rope_params matches the max_seq_len argument
+        if rope_params is not None:
+            assert max_seq_len == rope_params.get(
+                "max_seq_len", max_seq_len
+            ), "max_seq_len must match rope_params max_seq_len"
+
         self.embedding = Embedding(
             num_embeddings=vocab_size, embedding_dim=d_model, device=device, dtype=dtype
         )
@@ -960,50 +965,63 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     targets: torch.Tensor
         Target tensor of shape (batch_size, seq_len).
     Recall that the transformer model defines a distribution p_theta(X_{i+1}, x_{1:i})
-    for each sequence of x of length m+1 and i=1..m. Given a training set D consisting of
-    sequences of lengh m we define the standard cross-entropy (negative log-likelyhood) loss function:
+    for each sequence of x of length m+1 and i=1..m. Given a training set D consisting
+    of sequences of lengh m we define the standard cross-entropy (negative
+    log-likelyhood) loss function:
 
-    l(theta, D) = (1 / m|D|) Sum over x in D Sum over i=1..m -log(p_theta(X_{i+1} | x_{1:i}))
+    l(theta, D) = (1 / m|D|) Sum over x in D Sum over i=1..m -log(p_theta(X_{i+1} | x_{1:i}))  # noqa: E501
 
-    Note that a single forward pass of the transformer language model will give us the p_theta(X_{i+1} | x_{1:i}) for all i=1..m,
+    Note that a single forward pass of the transformer language model will give us the
+    p_theta(X_{i+1} | x_{1:i}) for all i=1..m,
     so we can compute this loss with a single forward pass.
 
-    In particular, the Transformer computes logits o_i in R^{vocab_size} for each position i,
-    and then applies a softmax to get the distribution
-    p_theta(X_{i+1} | x_{1:i}) = softmax(o_i)[x_{i+1}] = exp(o_i[x_{i+1}]) / sum_a exp(o_i[a]) with _a_ running over the vocabulary.
+    In particular, the Transformer computes logits o_i in R^{vocab_size} for each
+    position i, and then applies a softmax to get the distribution
+    p_theta(X_{i+1} | x_{1:i}) = softmax(o_i)[x_{i+1}] = exp(o_i[x_{i+1}]) / sum_a exp(o_i[a]) noqa: E501
+    with _a_ running over the vocabulary.
 
-    The cross-entropy loss is generally defined with respect to the vector of logits o_i in R^{vocab_size} and the target (true next token) x_{i+1}.
-    Implementing the cross-entropy loss function requires some care with numerical issues, just like the softmax function does.
+    The cross-entropy loss is generally defined with respect to the vector of logits
+    o_i in R^{vocab_size} and the target (true next token) x_{i+1}.
+    Implementing the cross-entropy loss function requires some care with numerical
+    issues, just like the softmax function does.
 
-    The cross-entropy loss is basically saying "how surprised was the model to see the actual next token x_{i+1} given the previous tokens x_{1:i}?"
+    The cross-entropy loss is basically saying "how surprised was the model to see the
+    actual next token x_{i+1} given the previous tokens x_{1:i}?"
 
-    - recall p(x) is non-negative and sums to 1, so -log(p(x)) is non-negative and is zero
-    when p(x) = 1 (perfect prediction).
-    - log(p(x)) will be negative when p(x) is between 0 and 1, and will approach negative infinity as p(x) approaches zero (very bad prediction).
-    - it will be a bit hyperbolic-down looking at it, but when we take the negative, it will look like a hyperbolic-up curve that approaches zero as p(x) approaches 1
-    , and grows larger as p(x) approaches zero.
-    - The loss is basically saying "for each token in the sequence, how surprised was the model to see that token given the previous tokens?"
+    - recall p(x) is non-negative and sums to 1, so -log(p(x)) is non-negative and is
+    zero when p(x) = 1 (perfect prediction).
+    - log(p(x)) will be negative when p(x) is between 0 and 1, and will approach
+    negative infinity as p(x) approaches zero (very bad prediction).
+    - it will be a bit hyperbolic-down looking at it, but when we take the negative, it
+    will look like a hyperbolic-up curve that approaches zero as p(x) approaches 1, and
+    grows larger as p(x) approaches zero.
+    - The loss is basically saying "for each token in the sequence, how surprised was
+    the model to see that token given the previous tokens?"
 
-    Deliverable: Write a function to compute the cross-entropy loss given the predicted logits o_i and targets x_{i+1} and compute the
-    cross-entropy l = -log(softmax(o_i)[x_{i+1}]) in a numerically stable way.
+    Deliverable: Write a function to compute the cross-entropy loss given the predicted
+    logits o_i and targets x_{i+1} and compute the cross-entropy
+    l = -log(softmax(o_i)[x_{i+1}]) in a numerically stable way.
 
     Your function should handle the following:
-    - Subtract the largets element for numerical stability
+    - Subtract the largest element for numerical stability
     - Cancel out log and exp whenever possible.
-    - handle any additional batch dimensions and return the _average across the batch_ (i.e. return a scalar loss value, not a vector of losses for each example in the batch).
-    As with Section 3.3 we assume batch-like dimensions are leading dimensions, and the final two dimensions of the logits are (seq_len, vocab_size)
-    and the final dimension of the targets is (seq_len).
+    - handle any additional batch dimensions and return the _average across the batch_
+    (i.e. return a scalar loss value, not a vector of losses for each example in the
+    batch). As with Section 3.3 we assume batch-like dimensions are leading dimensions,
+    and the final two dimensions of the logits are (seq_len, vocab_size) and the final
+    dimension of the targets is (seq_len).
 
     uv run pytest -s -v -k test_cross_entropy
     """
-    # TODO CHeck this AI generated code for correctness, and make sure it is consistent with the shapes of the inputs and outputs as described in the docstring.
-    # Subtract the maximum logit for numerical stability (this ensures that the maximum number
-    # in the array being exponentiated is zero, so it cannot blow up from large exponents.
+    # TODO CHeck this AI generated code for correctness, and make sure it is consistent
+    # with the shapes of the inputs and outputs as described in the docstring. Subtract
+    # the maximum logit for numerical stability (this ensures that the maximum number in
+    # the array being exponentiated is zero, so it cannot blow up from large exponents.
     logger.info("INPUTS:\n")
     logger.info(
         f"cross_entropy: o_i shape: {o_i.shape}, targets shape: {targets.shape}"
     )
-    logger.info(f"\n")
+    logger.info("\n")
     logger.info(f"cross_entropy: o_i: \n {o_i}, \n targets: \n {targets}")
     max_logit = torch.max(o_i, dim=-1, keepdim=True).values
     logger.info(
@@ -1011,7 +1029,8 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     )
     shifted_logits = o_i - max_logit  # shape (..., seq_len, vocab_size)
     logger.info(
-        f"cross_entropy: shifted_logits shape: {shifted_logits.shape}, shifted_logits: \n {shifted_logits}"
+        f"cross_entropy: shifted_logits shape: {shifted_logits.shape}, \
+        shifted_logits: \n {shifted_logits}"
     )
 
     # Compute the log-sum-exp for the denominator of the softmax
@@ -1019,7 +1038,8 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         torch.sum(torch.exp(shifted_logits), dim=-1)
     )  # shape (..., seq_len)
     logger.info(
-        f"cross_entropy: log_sum_exp shape: {log_sum_exp.shape}, log_sum_exp: \n {log_sum_exp}"
+        f"cross_entropy: log_sum_exp shape: {log_sum_exp.shape}, \
+        log_sum_exp: \n {log_sum_exp}"
     )
 
     # Compute the log probability of the target token
@@ -1029,7 +1049,8 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         -1
     )  # shape (..., seq_len)
     logger.info(
-        f"cross_entropy: target_log_prob shape: {target_log_prob.shape}, target_log_prob: \n {target_log_prob}"
+        f"cross_entropy: target_log_prob shape: {target_log_prob.shape}, \
+        target_log_prob: \n {target_log_prob}"
     )
     # Compute the cross-entropy loss
     loss = log_sum_exp - target_log_prob  # shape (..., seq_len)
@@ -1042,12 +1063,13 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
 class AdamW(torch.optim.Optimizer):
     """
 
-    Deliverable: Implement the AdamW optimizer as a subclass of torch.optim.Optimizer. Your
-    class should take the learning rate α in __init__, as well as the β, ε and λ hyperparameters. To help
-    you keep state, the base Optimizer class gives you a dictionary self.state, which maps nn.Parameter
-    objects to a dictionary that stores any information you need for that parameter (for AdamW, this would
-    be the moment estimates). Implement [adapters.get_adamw_cls] and make sure it passes uv run
-    pytest -k test_adamw .
+    Deliverable: Implement the AdamW optimizer as a subclass of torch.optim.Optimizer.
+    Your class should take the learning rate α in __init__, as well as the β, ε and λ
+    hyperparameters. To help you keep state, the base Optimizer class gives you a
+    dictionary self.state, which maps nn.Parameter objects to a dictionary that stores
+    any information you need for that parameter (for AdamW, this would be the moment
+    estimates). Implement [adapters.get_adamw_cls] and
+    uv run pytest -k test_adamw .
 
     """
 
@@ -1076,7 +1098,8 @@ class AdamW(torch.optim.Optimizer):
         """
         This is what gets "looped over t = 1..T" in the AdamW algorithm.
 
-        Note how passing teh betas (for example) into the detaults dict in the init allows us to access them here via group["betas"] for each param group.
+        Note how passing teh betas (for example) into the detaults dict in the init
+        allows us to access them here via group["betas"] for each param group.
         **this is really cool and powerful!**
 
         """
@@ -1095,7 +1118,8 @@ class AdamW(torch.optim.Optimizer):
             beta2 = betas[1]
 
             for p in group["params"]:
-                # init(θ) (Initialize learnable parameters) -- this p basicall, p refers to subspace of theta-land
+                # init(θ) (Initialize learnable parameters) -- this p basicall, p
+                # refers to subspace of theta-land
                 if p.grad is None:
                     continue
 
@@ -1114,13 +1138,13 @@ class AdamW(torch.optim.Optimizer):
                     "v", torch.zeros_like(p.data)
                 )  # Get second moment vector from the state, or initial value.
 
-                # g ←∇θℓ(θ; Bt) (Compute the gradient of the loss at the current time step)
+                # g ←∇θℓ(θ; Bt) (Compute the gradient of the loss at current time step)
                 grad = p.grad.data  # Get the gradient of loss with respect to p.
 
                 # m ←β1m + (1 −β1)g (Update the first moment estimate)
                 m = beta1 * m + (1 - beta1) * grad  # Update the first moment vector.
-                # ... perhaps think of this as "momentum", its large when the gradients are
-                # large, and small when the gradients are small, and it is a running average
+                # ... perhaps think of this as "momentum", its large when gradients are
+                # large, and small when the gradients are small, it is a running average
                 # of the gradients over time.
 
                 # # v ←β2v + (1 −β2)g2 (Update the second moment estimate)
@@ -1142,22 +1166,10 @@ class AdamW(torch.optim.Optimizer):
                 state["t"] = t + 1  # Increment iteration number.
                 state["m"] = m  # Update first moment vector in state.
                 state["v"] = v  # Update second moment vector in state.
-                # state["lr"] = lr # Update learning rate in state (optional, for logging or debugging).
+                # state["lr"] = lr # Update learning rate in state (optional, for
+                # logging or debugging).
 
         return loss
-
-
-# Problem (adamwAccounting): Resource accounting for training with AdamW (2 points)
-# Let us compute how much memory and compute running AdamW requires. Assume we are using
-# float32 for every tensor.
-# (a) How much peak memory does running AdamW require? Decompose your answer based on the
-# memory usage of the parameters, activations, gradients, and optimizer state. Express your answer
-# in terms of the batch_size and the model hyperparameters (vocab_size, context_length,
-# num_layers, d_model, num_heads). Assume d_ff = 4 ×d_model.
-# For simplicity, when calculating memory usage of activations, consider only the following compo-
-# nents:
-# • Transformer block
-# – RMSNorm(s)
 
 
 def get_batch(
@@ -1175,17 +1187,28 @@ def get_batch(
     device: str
         PyTorch device string (e.g., 'cpu' or 'cuda:0').
 
-    Deliverable: Write a function that takes a numpy array x (integer array with token IDs), a
-    batch_size, a context_length and a PyTorch device string (e.g., 'cpu' or 'cuda:0'), and returns
-    a pair of tensors: the sampled input sequences and the corresponding next-token targets. Both ten-
-    sors should have shape (batch_size, context_length) containing token IDs, and both should be
-    placed on the requested device. To test your implementation against our provided tests, you will first
-    need to implement the test adapter at [adapters.run_get_batch]. Then, run uv run pytest -k
-    test_get_batch to test your implementation
+    Returns
+    -------
+    Tuple[torch.Tensor, torch.Tensor]
+        A pair of tensors: the sampled input sequences and the corresponding next-token
+        targets. Both tensors have shape (batch_size, context_length) containing token
+        IDs, and both are placed on the requested device.
+
+
+    Deliverable: Write a function that takes a numpy array x (integer array with token
+    IDs), a batch_size, a context_length and a PyTorch device string (e.g., 'cpu' or
+    'cuda:0'), and returns a pair of tensors: the sampled input sequences and the
+    corresponding next-token targets. Both tensors should have shape (batch_size,
+    context_length) containing token IDs, and both should be placed on the requested
+    device. To test your implementation against our provided tests, you will first need
+    to implement the test adapter at [adapters.run_get_batch].
+
+    uv run pytest -k test_get_batch to test your implementation
     """
 
     logger.info(
-        f"get_batch: x shape: {x.shape}, batch_size: {batch_size}, context_length: {context_length}, device: {device}"
+        f"get_batch: x shape: {x.shape}, batch_size: {batch_size},\
+          context_length: {context_length}, device: {device}"
     )
     start_indices = np.random.randint(0, len(x) - context_length, size=batch_size)
     end_indices = start_indices + context_length
@@ -1195,7 +1218,7 @@ def get_batch(
         device=device,
     )
     next_token_targets = torch.tensor(
-        [x[start + 1 : end + 1] for start, end in zip(start_indices, end_indices)],
+        [x[(start + 1) : (end + 1)] for start, end in zip(start_indices, end_indices)],
         dtype=torch.int32,
         device=device,
     )
