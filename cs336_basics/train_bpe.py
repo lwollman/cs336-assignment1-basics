@@ -229,8 +229,6 @@ def split_on_special_tokens(
     >>> split_on_special_tokens("foo bar baz", ["bar"], rejoin=False)
     ['foo ', ' baz']
 
-    TODO: Discuss; if we want to rename this to drop_special_tokens and return the
-    joined output?
     """
 
     # sorted_tokens = special_tokens.sort()
