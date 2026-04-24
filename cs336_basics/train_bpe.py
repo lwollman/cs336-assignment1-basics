@@ -151,6 +151,20 @@ def train_bpe(
         - Convert pretokenized data into UTF-8 Bytes
         - Train BPE merges on the byte-level representation
 
+    Pretokenization:
+    bascially boils down to:
+    pretokens = []
+    for segment in segments:
+        for pt in pretokenize(segment):
+            pretokens.append(pt)
+    but you can also do it in a more compact way using list comprehensions, like in
+    Ron's code.  Here we use an equivalent way of writing the same thing, but using
+    itertools.chain.from_iterable.
+    So, if segments is ["hello world", "foo bar"], and pretokenize splits on spaces,
+    you get:
+    pretokenize("hello world") → ["hello", "world"]
+    pretokenize("foo bar") → ["foo", "bar"]
+    The double for loop flattens these into one list: ["hello", "world", "foo", "bar"]
     """
     vocab = make_initial_vocab()
     # merges = []
@@ -167,7 +181,7 @@ def train_bpe(
     print(f"Original text\n {text}")
 
     # Apply special splits
-    splitted_text = split_on_special_tokens(
+    segments = split_on_special_tokens(
         input_string=text, special_tokens=special_tokens, rejoin=False
     )
 
@@ -182,12 +196,18 @@ def train_bpe(
     # with parallelization.
 
     pretokenized_text = list(
-        chain.from_iterable(pretokenize(segment) for segment in splitted_text)
+        chain.from_iterable(pretokenize(segment) for segment in segments)
     )
-    print(f"Pretokenized text\n {pretokenized_text}")
+    print(f"pretokenized_text\n {pretokenized_text}")
 
     # Now that you have the pretokenized text, you can convert it to bytes and then
     # train the BPE merges on the byte-level representation.
+
+    # TODO: Add frequency counter tools (see Ron's code) to count the frequency of
+    # token pairs
+    # pretok_freqs = dict(Counter(pretokenized_text))
+    # print(f"pretok_freqs\n {pretok_freqs}")
+
     print("TODO: FIXME Transform to Bytes")
 
     # bytes =
@@ -217,7 +237,7 @@ def split_on_special_tokens(
     -------
     splitted: Union[list[str], str]
         The input string split on the special tokens. If `rejoin` is True, returns a
-        single-element list containing the joined string.
+        single string with the split parts joined by spaces.
         Note the split operation (string chunking) will drop all the special_tokens.
 
 
