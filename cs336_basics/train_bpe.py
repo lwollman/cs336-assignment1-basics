@@ -69,7 +69,7 @@ Primary Function: It automatically tallies the frequency of elements in an itera
 """
 
 import pathlib
-# from collections import Counter
+from collections import Counter
 from itertools import chain
 # from loguru import logger
 from typing import Literal, Optional, Union
@@ -116,10 +116,33 @@ def make_initial_vocab(debug: bool = False) -> dict[int, bytes]:
     return vocab
 
 
+def string_as_byte_list(s: str) -> list[int]:
+    """
+    Convert a string to a list of byte values (integers in the range 0-255) using UTF-8
+    encoding.
+
+    for example, the string "hello" would be converted to [104, 101, 108, 108, 111],
+    since those are UTF-8 byte values for the characters 'h', 'e', 'l', 'l', and 'o'.
+
+    Parameters:
+    -----------
+    s: str
+        The input string to be converted to a list of byte values.  This string will be
+        encoded using UTF-8, which can represent all Unicode characters.
+
+    Returns:
+    --------
+    list[int]
+        A list of byte values representing the input string.
+    """
+    return [b for b in s.encode("utf-8")]
+
+
 def train_bpe(
     input_path: Union[str, pathlib.Path] = TOY_INPUT_FILE,
     vocab_size: int = 256 * 10,
     special_tokens: list[str] = DEFAULT_SPECIAL_TOKENS,
+    debug: bool = False,
 ):
     """
 
@@ -167,7 +190,7 @@ def train_bpe(
     The double for loop flattens these into one list: ["hello", "world", "foo", "bar"]
     """
     vocab = make_initial_vocab()
-    # merges = []
+    merges = []
     new_vocab_idx = len(vocab)
 
     # add special tokens to vocab
@@ -178,7 +201,8 @@ def train_bpe(
     # get input text
     with open(input_path) as f:
         text = f.read()
-    print(f"Original text\n {text}")
+    if debug:
+        print(f"Original text\n {text}")
 
     # Apply special splits
     segments = split_on_special_tokens(
@@ -198,18 +222,61 @@ def train_bpe(
     pretokenized_text = list(
         chain.from_iterable(pretokenize(segment) for segment in segments)
     )
-    print(f"pretokenized_text\n {pretokenized_text}")
+    if debug:
+        print(f"pretokenized_text\n {pretokenized_text}")
 
     # Now that you have the pretokenized text, you can convert it to bytes and then
     # train the BPE merges on the byte-level representation.
 
     # TODO: Add frequency counter tools (see Ron's code) to count the frequency of
     # token pairs
-    # pretok_freqs = dict(Counter(pretokenized_text))
-    # print(f"pretok_freqs\n {pretok_freqs}")
+    pretok_freqs = dict(Counter(pretokenized_text))
+    pretok_deduped, pretok_weights = zip(*pretok_freqs.items())
+    pretok_deduped = list(pretok_deduped)
+    pretok_weights = list(pretok_weights)
+    pretok_ids = [string_as_byte_list(pt) for pt in pretok_deduped]
+    # n_pretok = len(pretok_deduped)
+    # uncomment when using toy example to see the frequencies of the pretokenized text
+    if debug:
+        print(f"pretok_freqs\n {pretok_freqs}")
+        print(f"pretok_deduped\n {pretok_deduped}")
+        print(f"pretok_weights\n {pretok_weights}")
+        print(f"pretok_ids\n {pretok_ids}")
 
-    print("TODO: FIXME Transform to Bytes")
+    # counts = None
+    # new_style_counts = None
+    # for i_merge in range(vocab_size - 257):
+    #     if not counts:
+    #         counts = Counter()
+    #         pretok_batch_counts = [
+    #             count_token_pairs_cached(tuple(tokids)) for tokids in pretok_ids
+    #         ]
+    #         for bc, wt in zip(pretok_batch_counts, pretok_weights):
+    #             for k, v in bc.items():
+    #                 counts[k] += v * wt
 
+    #     best_pair = get_best_pair(counts, vocab)
+    #     best_bytes = tokids_to_bytestring(best_pair, vocab)
+    #     vocab[new_vocab_idx] = best_bytes
+    #     # this_merge = tuple([vocab[tid] for tid in best_pair])
+    #     this_merge = (vocab[best_pair[0]], vocab[best_pair[1]])  # slightly faster
+    #     merges.append(this_merge)
+    #     # print(f"merged {this_merge}")
+    #     merge_results = [
+    #         merge_tokids(tokids, best_pair, new_vocab_idx) for tokids in pretok_ids
+    #     ]
+    #     pretok_ids = [newtoks for newtoks, deltas in merge_results]
+    #     deltas = [deltas for newtoks, deltas in merge_results]
+    #     for d, wt in zip(deltas, pretok_weights):
+    #         if d:
+    #             for k, v in d.items():
+    #                 counts[k] += v * wt
+
+    #     new_vocab_idx += 1
+    #     # print(f"####### {pretokids}")
+
+    # print("lv",len(vocab),"lm",len(merges))
+    return vocab, merges
     # bytes =
 
     return
@@ -306,7 +373,12 @@ def pretokenize(
 
 
 def main():
-    train_bpe()
+    train_bpe(
+        input_path=TOY_INPUT_FILE,
+        vocab_size=256 * 10,
+        special_tokens=DEFAULT_SPECIAL_TOKENS,
+        debug=True,
+    )
 
 
 if __name__ == "__main__":
