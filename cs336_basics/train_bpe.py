@@ -78,6 +78,11 @@ import regex
 
 from cs336_basics import CS336_BASICS_ROOT
 
+# from functools import lru_cache, cache
+
+
+
+
 DATA_FOLDER = CS336_BASICS_ROOT.joinpath("data")
 print(f"data folder = {DATA_FOLDER}")
 assert DATA_FOLDER.exists()
@@ -138,6 +143,36 @@ def string_as_byte_list(s: str) -> list[int]:
     return [b for b in s.encode("utf-8")]
 
 
+# def count_token_pairs(tokids: list[int]) -> dict[tuple[int, int], int]:
+#     """
+#     Count the frequency of adjacent token pairs in a list of token IDs.
+
+#     Parameters:
+#     -----------
+#     tokids: list[int]
+#         A list of token IDs representing a sequence of tokens.
+#     Returns:
+#     --------
+#     dict[tuple[int, int], int]
+#         A dictionary where the keys are tuples of adjacent token IDs (token pairs) and the
+#         values are the counts of how many times each token pair appears in the input list.
+#     Example:
+#     --------
+#     >>> count_token_pairs([1, 2, 3, 2, 1, 2])
+#     {(1, 2): 2, (2, 3): 1, (3, 2): 1, (2, 1): 1}
+#     """
+#     cnts = {}
+#     for a, b in zip(tokids, tokids[1:]):
+#         cnts[(a, b)] = cnts.get((a, b), 0) + 1
+#     return cnts
+
+
+# # @lru_cache(maxsize=10000)
+# @cache
+# def count_token_pairs_cached(tokids_tuple: tuple[int, ...]):
+#     return count_token_pairs(list(tokids_tuple))
+
+
 def train_bpe(
     input_path: Union[str, pathlib.Path] = TOY_INPUT_FILE,
     vocab_size: int = 256 * 10,
@@ -188,6 +223,7 @@ def train_bpe(
     pretokenize("hello world") → ["hello", "world"]
     pretokenize("foo bar") → ["foo", "bar"]
     The double for loop flattens these into one list: ["hello", "world", "foo", "bar"]
+
     """
     vocab = make_initial_vocab()
     merges = []
@@ -209,16 +245,7 @@ def train_bpe(
         input_string=text, special_tokens=special_tokens, rejoin=False
     )
 
-    # Here we rejoin the splitted text with spaces, but we could also keep it as a list
-    # of strings and pretokenize each separately -- offering an opportunity for
-    # parallelization.
-    # print(f"special_splitted_text\n {splitted_text}")
-    # text_without_special_tokens = " ".join(splitted_text)
-
     # Pretokenize
-    # TODO: consider placing the for loop outside the pretokenizer to help
-    # with parallelization.
-
     pretokenized_text = list(
         chain.from_iterable(pretokenize(segment) for segment in segments)
     )
@@ -243,18 +270,20 @@ def train_bpe(
         print(f"pretok_weights\n {pretok_weights}")
         print(f"pretok_ids\n {pretok_ids}")
 
-    # counts = None
+    # main BPE training loop..
+
+    # # initialize counts of token pairs
+    # counts = Counter()
+    # pretok_batch_counts = [
+    #     count_token_pairs_cached(tuple(tokids)) for tokids in pretok_ids
+    # ]
+    # for bc, wt in zip(pretok_batch_counts, pretok_weights):
+    #     for k, v in bc.items():
+    #         counts[k] += v * wt
+
     # new_style_counts = None
     # for i_merge in range(vocab_size - 257):
-    #     if not counts:
-    #         counts = Counter()
-    #         pretok_batch_counts = [
-    #             count_token_pairs_cached(tuple(tokids)) for tokids in pretok_ids
-    #         ]
-    #         for bc, wt in zip(pretok_batch_counts, pretok_weights):
-    #             for k, v in bc.items():
-    #                 counts[k] += v * wt
-
+    #     print(f"merge {i_merge}")
     #     best_pair = get_best_pair(counts, vocab)
     #     best_bytes = tokids_to_bytestring(best_pair, vocab)
     #     vocab[new_vocab_idx] = best_bytes
@@ -275,7 +304,7 @@ def train_bpe(
     #     new_vocab_idx += 1
     #     # print(f"####### {pretokids}")
 
-    # print("lv",len(vocab),"lm",len(merges))
+    print("lv", len(vocab), "lm", len(merges))
     return vocab, merges
     # bytes =
 

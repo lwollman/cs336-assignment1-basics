@@ -66,8 +66,8 @@ class Linear(torch.nn.Module):
          putting it in an nn.Parameter
         - of course, don’t use nn.Linear or nn.functional.linear
         """
-        print(x.shape)  # 4 , 12, 64
-        print(self.weights.shape)
+        # print(x.shape)  # 4 , 12, 64
+        # print(self.weights.shape)
         result = x @ self.weights.T  # @ x
         # result = self.weights @ x.T
 
@@ -207,7 +207,7 @@ class RMSLayerNormalization(torch.nn.Module):
 
         Normalize input tensor by the scalar RMS(a) -- see Equation (4) in the notes.
         """
-        DEBUG = True
+        DEBUG = False
         if DEBUG:
             logger.debug(f" Norm {self} forward called with input of shape {a.shape}")
         # Upcast to float32
@@ -931,6 +931,9 @@ class TransformerLanguageModel(torch.nn.Module):
         """
         Forward pass of the Transformer language model.
 
+        This does not apply a softmax to the output logits, as the loss function will
+        handle that.
+
         Parameters
         ----------
         token_ids: torch.Tensor
@@ -961,9 +964,10 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     o_i: torch.Tensor
         Predicted Logits tensor of shape (batch_size, seq_len, vocab_size).
         This is the output of the transformer language model for a batch of sequences.
-        It
+
     targets: torch.Tensor
         Target tensor of shape (batch_size, seq_len).
+
     Recall that the transformer model defines a distribution p_theta(X_{i+1}, x_{1:i})
     for each sequence of x of length m+1 and i=1..m. Given a training set D consisting
     of sequences of lengh m we define the standard cross-entropy (negative
@@ -1017,30 +1021,36 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     # with the shapes of the inputs and outputs as described in the docstring. Subtract
     # the maximum logit for numerical stability (this ensures that the maximum number in
     # the array being exponentiated is zero, so it cannot blow up from large exponents.
-    logger.info("INPUTS:\n")
-    logger.info(
-        f"cross_entropy: o_i shape: {o_i.shape}, targets shape: {targets.shape}"
-    )
-    logger.info("\n")
-    logger.info(f"cross_entropy: o_i: \n {o_i}, \n targets: \n {targets}")
+
+    DEBUG = True
+    if DEBUG:
+        logger.info("INPUTS:\n")
+        logger.info(
+            f"cross_entropy: o_i shape: {o_i.shape}, targets shape: {targets.shape}"
+        )
+        logger.info("\n")
+        logger.info(f"cross_entropy: o_i: \n {o_i}, \n targets: \n {targets}")
+
     max_logit = torch.max(o_i, dim=-1, keepdim=True).values
-    logger.info(
-        f"cross_entropy: max_logit shape: {max_logit.shape}, max_logit: \n {max_logit}"
-    )
+
+    if DEBUG:
+        logger.info(f"cross_entropy: max_logit shape: {max_logit.shape}, \
+            max_logit: \n {max_logit}")
+
     shifted_logits = o_i - max_logit  # shape (..., seq_len, vocab_size)
-    logger.info(
-        f"cross_entropy: shifted_logits shape: {shifted_logits.shape}, \
-        shifted_logits: \n {shifted_logits}"
-    )
+
+    if DEBUG:
+        logger.info(f"cross_entropy: shifted_logits shape: {shifted_logits.shape}, \
+            shifted_logits: \n {shifted_logits}")
 
     # Compute the log-sum-exp for the denominator of the softmax
     log_sum_exp = torch.log(
         torch.sum(torch.exp(shifted_logits), dim=-1)
     )  # shape (..., seq_len)
-    logger.info(
-        f"cross_entropy: log_sum_exp shape: {log_sum_exp.shape}, \
-        log_sum_exp: \n {log_sum_exp}"
-    )
+
+    if DEBUG:
+        logger.info(f"cross_entropy: log_sum_exp shape: {log_sum_exp.shape}, \
+            log_sum_exp: \n {log_sum_exp}")
 
     # Compute the log probability of the target token
     target_log_prob = shifted_logits.gather(
@@ -1048,14 +1058,14 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     ).squeeze(
         -1
     )  # shape (..., seq_len)
-    logger.info(
-        f"cross_entropy: target_log_prob shape: {target_log_prob.shape}, \
-        target_log_prob: \n {target_log_prob}"
-    )
+    if DEBUG:
+        logger.info(f"cross_entropy: target_log_prob shape: {target_log_prob.shape}, \
+            target_log_prob: \n {target_log_prob}")
     # Compute the cross-entropy loss
     loss = log_sum_exp - target_log_prob  # shape (..., seq_len)
-    logger.info(f"cross_entropy: loss shape: {loss.shape}, loss: \n {loss}")
-    logger.info(f"cross_entropy: loss (before mean): \n {loss}")
+    if DEBUG:
+        logger.info(f"cross_entropy: loss shape: {loss.shape}, loss: \n {loss}")
+        logger.info(f"cross_entropy: loss (before mean): \n {loss}")
     # Average over batch and sequence dimensions
     return loss.mean()
 
@@ -1206,10 +1216,8 @@ def get_batch(
     uv run pytest -k test_get_batch to test your implementation
     """
 
-    logger.info(
-        f"get_batch: x shape: {x.shape}, batch_size: {batch_size},\
-          context_length: {context_length}, device: {device}"
-    )
+    logger.info(f"get_batch: x shape: {x.shape}, batch_size: {batch_size},\
+          context_length: {context_length}, device: {device}")
     start_indices = np.random.randint(0, len(x) - context_length, size=batch_size)
     end_indices = start_indices + context_length
     sampled_inputs = torch.tensor(
@@ -1218,7 +1226,9 @@ def get_batch(
         device=device,
     )
     next_token_targets = torch.tensor(
-        [x[(start + 1) : (end + 1)] for start, end in zip(start_indices, end_indices)],
+        [
+            x[start + 1 : end + 1] for start, end in zip(start_indices, end_indices)
+        ],  # noqa: E203
         dtype=torch.int32,
         device=device,
     )
