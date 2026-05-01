@@ -958,7 +958,7 @@ class TransformerLanguageModel(torch.nn.Module):
 
 def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     """
-    CAUTION:
+
     Parameters
     ----------
     o_i: torch.Tensor
@@ -1022,7 +1022,7 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     # the maximum logit for numerical stability (this ensures that the maximum number in
     # the array being exponentiated is zero, so it cannot blow up from large exponents.
 
-    DEBUG = True
+    DEBUG = False
     if DEBUG:
         logger.info("INPUTS:\n")
         logger.info(
@@ -1043,16 +1043,18 @@ def cross_entropy(o_i: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         logger.info(f"cross_entropy: shifted_logits shape: {shifted_logits.shape}, \
             shifted_logits: \n {shifted_logits}")
 
+    # TODO FIXME -- use einx to make this easier to read.
+    # https://github.com/rmayer-sst/stanford-cs336-assignment1-basics/blob/ron/cs336_basics/ron_cross_entropy.py
     # Compute the log-sum-exp for the denominator of the softmax
     log_sum_exp = torch.log(
         torch.sum(torch.exp(shifted_logits), dim=-1)
     )  # shape (..., seq_len)
-
     if DEBUG:
         logger.info(f"cross_entropy: log_sum_exp shape: {log_sum_exp.shape}, \
             log_sum_exp: \n {log_sum_exp}")
 
     # Compute the log probability of the target token
+    # i.e. what probability did the model assign to the actual next token x_{i+1}?
     target_log_prob = shifted_logits.gather(
         dim=-1, index=targets.unsqueeze(-1)
     ).squeeze(
