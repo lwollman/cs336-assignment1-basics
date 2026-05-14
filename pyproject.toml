@@ -8,7 +8,7 @@ dependencies = [
     "einops>=0.8.1", # tensor operations
     "einx>=0.3.0", # more general tensor operations
     "jaxtyping>=0.3.0", # type hints for pytorch/jax/numpy
-    "loguru", 
+    "loguru",
     "numpy",
     "psutil>=6.1.1",
     "pytest>=8.3.4",
@@ -21,6 +21,7 @@ dependencies = [
     "wandb>=0.19.7",
     "ty>=0.0.1a16",
     # "scalene>=1.5.54",
+    "torchview>=0.2.7",
 ]
 
 [build-system]

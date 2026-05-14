@@ -577,6 +577,9 @@ def scaled_dot_product_attention(
 
     # apply the mask if given:
     min_qk_elt = torch.min(qk) + float("-inf")  # (bs FLOPS)
+    # this is a bit hacky, but we want to set the masked elements to -inf so that
+    # after the softmax they will be zero, but we want to avoid blowing up from large
+    # exponents, so we set them to the minimum element of qk + -inf, which is just -inf
 
     # do masking
     masked_qk = qk.clone()
@@ -720,7 +723,6 @@ class MultiheadedSelfAttention(torch.nn.Module):
         K_reshaped = einx.rearrange("b s (h dk) -> b h s dk", K, h=self.num_heads)
         V_reshaped = einx.rearrange("b s (h dv) -> b h s dv", V, h=self.num_heads)
 
-        # rope is next (TODO)
         if self.rope_params is not None:
             rope_operator = RotaryPositionalEmbedding(
                 theta=10000.0, d_k=d_k, max_seq_len=x.shape[1], device=x.device
