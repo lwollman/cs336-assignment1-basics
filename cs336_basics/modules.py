@@ -514,7 +514,8 @@ def scaled_dot_product_attention(
     keys: Float[Tensor, " ... m d_k"],  # noqa: F722
     values: Float[Tensor, " ... m d_v"],  # noqa: F722
     mask: Optional[Float[Tensor, " ... queries key"]] = None,  # noqa: F722
-) -> Float[Tensor, " ... queries d_v"]:  # noqa: F722
+    return_attention_weights: bool = False,
+) -> Float[Tensor, " ... n d_v"] | tuple[Float[Tensor, " ... n d_v"], Float[Tensor, " ... n m"]]:  # noqa: F722
     """
     Deliverable: Implement the scaled dot-product attention (SDPA) mechanism.
 
@@ -589,6 +590,8 @@ def scaled_dot_product_attention(
     # finally multiply by V
     A = einx.dot("... n m, ... m dv -> ... n dv", softmaxed_masked_qk, values)
 
+    if return_attention_weights:
+        return A, softmaxed_masked_qk
     return A
 
 
@@ -678,7 +681,7 @@ class MultiheadedSelfAttention(torch.nn.Module):
             dtype=dtype,
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, return_attention_weights: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
         Development notes:
                 # To implement multi-headed attention,
@@ -691,10 +694,14 @@ class MultiheadedSelfAttention(torch.nn.Module):
         ----------
         x: torch.Tensor
             Input tensor of shape (batch_size, seq_len, d_model).
+        return_attention_weights: bool
+            If True, also return attention weights of shape (batch, heads, seq_len, seq_len).
         Returns
         -------
-        torch.Tensor
+        torch.Tensor or tuple[torch.Tensor, torch.Tensor]
             Output tensor of shape (batch_size, seq_len, d_model).
+            If return_attention_weights is True, returns (output, attn_weights) where
+            attn_weights has shape (batch, heads, seq_len, seq_len).
             Unexpected key(s) in state_dict: "q_proj.weights", "k_proj.weights",
             "v_proj.weights", "output_proj.weights".
         """
@@ -758,8 +765,12 @@ class MultiheadedSelfAttention(torch.nn.Module):
         logger.info(f"causal mask shape after repeat for heads: {mask.shape}")
 
         A_for_all_heads_needs_reshaping = scaled_dot_product_attention(
-            Q_reshaped, K_reshaped, V_reshaped, mask=mask
+            Q_reshaped, K_reshaped, V_reshaped, mask=mask,
+            return_attention_weights=return_attention_weights,
         )
+
+        if return_attention_weights:
+            A_for_all_heads_needs_reshaping, attn_weights = A_for_all_heads_needs_reshaping
 
         # Contcatenation over the heads
         A_reshaped = einx.rearrange(
@@ -768,6 +779,8 @@ class MultiheadedSelfAttention(torch.nn.Module):
         )  # concatenate heads
         output = self.O(A_reshaped)  # shape (batch_size, seq_len, d_model)
 
+        if return_attention_weights:
+            return output, attn_weights
         return output
 
 
@@ -826,7 +839,7 @@ class TransformerBlock(torch.nn.Module):
         self.ffn = SwiGLUFFN(d_model=d_model, d_ff=d_ff, device=device, dtype=dtype)
         self.rms2 = RMSLayerNormalization(d_model=d_model, device=device, dtype=dtype)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, return_attention_weights: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass of the Transformer block.
 
@@ -834,15 +847,22 @@ class TransformerBlock(torch.nn.Module):
         ----------
         x: torch.Tensor
             Input tensor of shape (batch_size, seq_len, d_model).
+        return_attention_weights: bool
+            If True, also return attention weights of shape (batch, heads, seq_len, seq_len).
 
         Returns
         -------
-        torch.Tensor
+        torch.Tensor or tuple
             Output tensor of shape (batch_size, seq_len, d_model).
+            If return_attention_weights is True, returns (output, attn_weights).
         """
         # Multi-headed self-attention with residual connection
         x_rhs = self.rms1(x)
-        x_rhs = self.mhsa(x_rhs)
+        mhsa_out = self.mhsa(x_rhs, return_attention_weights=return_attention_weights)
+        if return_attention_weights:
+            x_rhs, attn_weights = mhsa_out
+        else:
+            x_rhs = mhsa_out
         x_after_1st_add = x + x_rhs
 
         # Position-wise feed-forward network with residual connection
@@ -852,6 +872,8 @@ class TransformerBlock(torch.nn.Module):
 
         output = x_after_1st_add + x_rhs
 
+        if return_attention_weights:
+            return output, attn_weights
         return output
 
 
@@ -929,7 +951,7 @@ class TransformerLanguageModel(torch.nn.Module):
 
         return
 
-    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+    def forward(self, token_ids: torch.Tensor, return_attention_weights: bool = False) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
         """
         Forward pass of the Transformer language model.
 
@@ -940,21 +962,33 @@ class TransformerLanguageModel(torch.nn.Module):
         ----------
         token_ids: torch.Tensor
             Input tensor of shape (batch_size, seq_len).
+        return_attention_weights: bool
+            If True, also return a list of attention weight tensors, one per layer,
+            each of shape (batch, heads, seq_len, seq_len).
 
         Returns
         -------
-        torch.Tensor
+        torch.Tensor or tuple
             Output tensor of shape (batch_size, seq_len, vocab_size).
+            If return_attention_weights is True, returns (logits, all_attn_weights)
+            where all_attn_weights is a list of tensors, one per transformer block.
         """
         x = self.embedding(token_ids)  # shape (batch_size, seq_len, d_model)
 
+        all_attn_weights = []
         for block in self.transformer_blocks:
-            x = block(x)  # shape (batch_size, seq_len, d_model)
+            if return_attention_weights:
+                x, attn_weights = block(x, return_attention_weights=True)
+                all_attn_weights.append(attn_weights)
+            else:
+                x = block(x)  # shape (batch_size, seq_len, d_model)
 
         x = self.norm(x)  # shape (batch_size, seq_len, d_model)
 
         logits = self.output_projection(x)  # shape (batch_size, seq_len, vocab_size)
 
+        if return_attention_weights:
+            return logits, all_attn_weights
         return logits
 
 
