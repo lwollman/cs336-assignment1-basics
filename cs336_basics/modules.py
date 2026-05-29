@@ -162,6 +162,9 @@ class RMSLayerNormalization(torch.nn.Module):
     normalization (and later downcast to the original dtype), as described above.
     To test your implementation, implement the test adapter at [adapters.run_rmsnorm].
     uv run pytest -k test_rmsnorm.
+
+    Note that this is an often used operator.  Each instance has its own set of learned
+    parameters g.
     """
 
     def __init__(
@@ -245,9 +248,8 @@ class RMSLayerNormalization(torch.nn.Module):
 class SwiGLUFFN(torch.nn.Module):
     """
 
-    Deliverable:
-    Implement the SwiGLU feed-forward network, composed of a SiLU activation
-    function and a GLU.
+    Deliverable: Implement the SwiGLU feed-forward network, composed of a SiLU
+    activation function and a Gated Linear Unit (GLU).
 
     **Note**: In this particular case, you should feel free to use torch.sigmoid in
     your implementation for numerical stability.
@@ -446,6 +448,8 @@ class RotaryPositionalEmbedding(torch.nn.Module):
             shape is (..., seq_len, d_k).
             d_k should be even so that the elements can be paired over 2D rotation
             matrices.
+            This defined the k-index (embedding attention subspace) for the RoPE
+            operation.
         token_positions: torch.Tensor
             A map of the token positions (within the sequence)
             (..., seq_len)
@@ -456,12 +460,6 @@ class RotaryPositionalEmbedding(torch.nn.Module):
             are not just 1, 2, 3 ... seq_len .. then i guess
 
         """
-
-        # d_k = x.shape[-1]  # Defines the k-index (embedding attention subspace)
-        # d_k_over_2 = d_k // 2  # num submatrices making up R_i
-        # seq_len = x.shape[-2]  # This corresponds to the i-index
-        # if np.mod(d_k,2) != 0:
-        #     logger.error(f"d_k should be even ... instead its {d_k}")
 
         # extract the cos and sin values for the token positions
         #  ...
@@ -515,7 +513,10 @@ def scaled_dot_product_attention(
     values: Float[Tensor, " ... m d_v"],  # noqa: F722
     mask: Optional[Float[Tensor, " ... queries key"]] = None,  # noqa: F722
     return_attention_weights: bool = False,
-) -> Float[Tensor, " ... n d_v"] | tuple[Float[Tensor, " ... n d_v"], Float[Tensor, " ... n m"]]:  # noqa: F722
+) -> (
+    Float[Tensor, " ... n d_v"]  # noqa: F722
+    | tuple[Float[Tensor, " ... n d_v"], Float[Tensor, " ... n m"]]  # noqa: F722
+):  # noqa: F722
     """
     Deliverable: Implement the scaled dot-product attention (SDPA) mechanism.
 
@@ -681,21 +682,22 @@ class MultiheadedSelfAttention(torch.nn.Module):
             dtype=dtype,
         )
 
-    def forward(self, x: torch.Tensor, return_attention_weights: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, x: torch.Tensor, return_attention_weights: bool = False
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
-        Development notes:
-                # To implement multi-headed attention,
-        # we need to split the inputs into heads
-        # then loop over the heads, applying out attention mechanism
-        # then concatenate the results (this is equations 12-13 in the notes)
-        - We will use einx to help with the reshaping and combining of the heads.
+        Multi-headed attention splits the inputs into heads,
+        then loops over the heads, applying our attention mechanism,
+        and then concatenates the results (this is equations 12-13 in the notes).
+        We use einx to help with the reshaping and combining of the heads.
 
         Parameters
         ----------
         x: torch.Tensor
             Input tensor of shape (batch_size, seq_len, d_model).
         return_attention_weights: bool
-            If True, also return attention weights of shape (batch, heads, seq_len, seq_len).
+            If True, also return attention weights of shape (batch, heads, seq_len,
+            seq_len).
         Returns
         -------
         torch.Tensor or tuple[torch.Tensor, torch.Tensor]
@@ -715,7 +717,7 @@ class MultiheadedSelfAttention(torch.nn.Module):
         Q = self.Q(x)  # shape (batch_size, seq_len, d_model)
         K = self.K(x)  # shape (batch_size, seq_len, d_model)
         V = self.V(x)  # shape (batch_size, seq_len, d_model
-        DEBUG = True
+        DEBUG = False
         if DEBUG:
             logger.debug(f"Shape check: {__class__.__name__}")
             logger.debug(f"queries : {Q.shape}")
@@ -765,12 +767,17 @@ class MultiheadedSelfAttention(torch.nn.Module):
         logger.info(f"causal mask shape after repeat for heads: {mask.shape}")
 
         A_for_all_heads_needs_reshaping = scaled_dot_product_attention(
-            Q_reshaped, K_reshaped, V_reshaped, mask=mask,
+            Q_reshaped,
+            K_reshaped,
+            V_reshaped,
+            mask=mask,
             return_attention_weights=return_attention_weights,
         )
 
         if return_attention_weights:
-            A_for_all_heads_needs_reshaping, attn_weights = A_for_all_heads_needs_reshaping
+            A_for_all_heads_needs_reshaping, attn_weights = (
+                A_for_all_heads_needs_reshaping
+            )
 
         # Contcatenation over the heads
         A_reshaped = einx.rearrange(
@@ -839,7 +846,9 @@ class TransformerBlock(torch.nn.Module):
         self.ffn = SwiGLUFFN(d_model=d_model, d_ff=d_ff, device=device, dtype=dtype)
         self.rms2 = RMSLayerNormalization(d_model=d_model, device=device, dtype=dtype)
 
-    def forward(self, x: torch.Tensor, return_attention_weights: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, x: torch.Tensor, return_attention_weights: bool = False
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass of the Transformer block.
 
@@ -848,7 +857,8 @@ class TransformerBlock(torch.nn.Module):
         x: torch.Tensor
             Input tensor of shape (batch_size, seq_len, d_model).
         return_attention_weights: bool
-            If True, also return attention weights of shape (batch, heads, seq_len, seq_len).
+            If True, also return attention weights of
+            shape (batch, heads, seq_len, seq_len).
 
         Returns
         -------
@@ -951,7 +961,9 @@ class TransformerLanguageModel(torch.nn.Module):
 
         return
 
-    def forward(self, token_ids: torch.Tensor, return_attention_weights: bool = False) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
+    def forward(
+        self, token_ids: torch.Tensor, return_attention_weights: bool = False
+    ) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
         """
         Forward pass of the Transformer language model.
 
@@ -1265,7 +1277,8 @@ def get_batch(
     )
     next_token_targets = torch.tensor(
         [
-            x[start + 1 : end + 1] for start, end in zip(start_indices, end_indices)
+            x[start + 1 : end + 1]  # noqa: E203
+            for start, end in zip(start_indices, end_indices)  # noqa: E203
         ],  # noqa: E203
         dtype=torch.int32,
         device=device,
